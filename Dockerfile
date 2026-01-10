@@ -1,8 +1,6 @@
-FROM clojure:temurin-21-lein-alpine
+FROM clojure:temurin-25-lein-trixie-slim
 
 WORKDIR /usr/src/app
-
-RUN apk add --no-cache git
 
 CMD ["--help"]
 
@@ -21,14 +19,3 @@ RUN lein uberjar && \
     cp target/analyses-standalone.jar .
 
 ENTRYPOINT ["analyses", "-Dlogback.configurationFile=/usr/src/app/logback.xml", "-cp", ".:analyses-standalone.jar:/", "analyses.core"]
-
-ARG git_commit=unknown
-ARG version=unknown
-ARG descriptive_version=unknown
-
-LABEL org.cyverse.git-ref="$git_commit"
-LABEL org.cyverse.version="$version"
-LABEL org.cyverse.descriptive-version="$descriptive_version"
-LABEL org.label-schema.vcs-ref="$git_commit"
-LABEL org.label-schema.vcs-url="https://github.com/cyverse-de/analyses"
-LABEL org.label-schema.version="$descriptive_version"
