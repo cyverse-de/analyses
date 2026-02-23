@@ -17,8 +17,8 @@ var httpClient = &http.Client{Timeout: 30 * time.Second}
 
 var domainSuffix = regexp.MustCompile(`@.*$`)
 
-// StripDomain removes the @domain suffix from a username.
-func StripDomain(username string) string {
+// stripDomain removes the @domain suffix from a username.
+func stripDomain(username string) string {
 	return domainSuffix.ReplaceAllString(username, "")
 }
 
@@ -39,7 +39,7 @@ func (c *AppsClient) buildURL(components []string, username string, query map[st
 	}
 	u.Path = strings.Join(append([]string{u.Path}, components...), "/")
 	q := u.Query()
-	q.Set("user", StripDomain(username))
+	q.Set("user", stripDomain(username))
 	for k, v := range query {
 		q.Set(k, v)
 	}
@@ -82,7 +82,7 @@ func (c *DataInfoClient) buildURL(components []string, username string, query ma
 	}
 	u.Path = strings.Join(append([]string{u.Path}, components...), "/")
 	q := u.Query()
-	q.Set("user", StripDomain(username))
+	q.Set("user", stripDomain(username))
 	for k, v := range query {
 		q.Set(k, v)
 	}

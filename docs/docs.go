@@ -1247,10 +1247,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "submission": {
-                    "type": "array",
-                    "items": {
-                        "type": "integer"
-                    }
+                    "type": "object"
                 }
             }
         },
@@ -1301,10 +1298,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "submission": {
-                    "type": "array",
-                    "items": {
-                        "type": "integer"
-                    }
+                    "type": "object"
                 }
             }
         },
@@ -1386,10 +1380,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "submission": {
-                    "type": "array",
-                    "items": {
-                        "type": "integer"
-                    }
+                    "type": "object"
                 }
             }
         },

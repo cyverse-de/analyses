@@ -49,9 +49,7 @@ definitions:
       name:
         type: string
       submission:
-        items:
-          type: integer
-        type: array
+        type: object
     type: object
   db.NewQuickLaunchGlobalDefault:
     properties:
@@ -84,9 +82,7 @@ definitions:
       name:
         type: string
       submission:
-        items:
-          type: integer
-        type: array
+        type: object
     type: object
   db.QuickLaunchFavorite:
     properties:
@@ -139,9 +135,7 @@ definitions:
       name:
         type: string
       submission:
-        items:
-          type: integer
-        type: array
+        type: object
     type: object
   db.UpdateQuickLaunchUserDefaultRequest:
     properties:

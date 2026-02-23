@@ -51,7 +51,7 @@ spec:
               ephemeral-storage: "100Mi"
             limits:
               cpu: "1000m"
-              memory: "256Mi"
+              memory: "512Mi"
               ephemeral-storage: "100Mi"
           env:
             - name: TZ

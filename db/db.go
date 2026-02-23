@@ -107,7 +107,7 @@ type QuickLaunch struct {
 	Name         string          `db:"name" json:"name"`
 	Description  string          `db:"description" json:"description"`
 	IsPublic     bool            `db:"is_public" json:"is_public"`
-	Submission   json.RawMessage `db:"submission" json:"submission"`
+	Submission   json.RawMessage `db:"submission" json:"submission" swaggertype:"object"`
 }
 
 // NewQuickLaunch represents the data needed to create a new quick launch.
@@ -117,7 +117,7 @@ type NewQuickLaunch struct {
 	AppID        string          `json:"app_id"`
 	AppVersionID string          `json:"app_version_id"`
 	IsPublic     bool            `json:"is_public"`
-	Submission   json.RawMessage `json:"submission"`
+	Submission   json.RawMessage `json:"submission" swaggertype:"object"`
 }
 
 // UpdateQuickLaunchRequest represents the data for updating a quick launch.
@@ -128,7 +128,7 @@ type UpdateQuickLaunchRequest struct {
 	AppVersionID *string          `json:"app_version_id,omitempty"`
 	IsPublic     *bool            `json:"is_public,omitempty"`
 	Creator      *string          `json:"creator,omitempty"`
-	Submission   *json.RawMessage `json:"submission,omitempty"`
+	Submission   *json.RawMessage `json:"submission,omitempty" swaggertype:"object"`
 }
 
 const quickLaunchSelectSQL = `

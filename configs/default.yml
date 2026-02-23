@@ -14,7 +14,7 @@
 # Database connection string (required).
 # Must be a valid PostgreSQL connection URI.
 db:
-  uri: "postgresql://de:notprod@dedb:5432/de?sslmode=disable"
+  uri: "postgresql://de:PASSWORD@dedb:5432/de?sslmode=disable"
 
 # Base URL for the apps service.
 # Used to fetch app definitions and validate quick launch submissions.
