@@ -1,19 +1,15 @@
-/target
-/classes
-/checkouts
-profiles.clj
-pom.xml
-pom.xml.asc
-*.jar
-!opentelemetry-javaagent.jar
-*.class
-/.lein-*
-/.nrepl-port
-.eastwood
-.hgignore
-.hg/
-.idea
+# Build output
+bin/
+
+# IDE
+.idea/
 *.iml
+.vscode/
+
+# OS
+.DS_Store
+
+# Config files with secrets
 analyses.properties
-.clj-kondo/
-.lsp/
+analyses.yml
+*.env
