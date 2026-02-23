@@ -11,7 +11,7 @@ import (
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
 
-	_ "github.com/cyverse-de/analyses/docs"
+	_ "github.com/cyverse-de/analyses/docs" // side-effect import: registers Swagger docs
 	echoSwagger "github.com/swaggo/echo-swagger"
 )
 
@@ -48,7 +48,7 @@ func NewAnalysesApp(database *sqlx.DB, appsBaseURL, dataInfoBaseURL string) *Ana
 
 	app.router.HTTPErrorHandler = func(err error, c echo.Context) {
 		code := http.StatusInternalServerError
-		var body interface{}
+		var body any
 
 		switch err := err.(type) {
 		case common.ErrorResponse:

@@ -63,6 +63,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("failed to connect to database: %s", err)
 	}
+	defer dbconn.Close() //nolint:errcheck
 	log.Info("Successfully connected to the database")
 
 	appsBaseURL := c.String("apps.base")

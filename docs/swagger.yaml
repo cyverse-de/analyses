@@ -3,7 +3,7 @@ definitions:
   common.ErrorResponse:
     properties:
       details:
-        additionalProperties: true
+        additionalProperties: {}
         type: object
       error_code:
         type: string

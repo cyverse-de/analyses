@@ -21,9 +21,9 @@ import (
 //	@Failure		500		{object}	common.ErrorResponse
 //	@Router			/quicklaunch/defaults/user [post]
 func (h *Handlers) AddUserDefaultHandler(c echo.Context) error {
-	user := c.QueryParam("user")
-	if user == "" {
-		return echo.NewHTTPError(http.StatusBadRequest, "user query parameter is required")
+	user, err := requireUser(c)
+	if err != nil {
+		return err
 	}
 
 	var nud db.NewQuickLaunchUserDefault
@@ -53,9 +53,9 @@ func (h *Handlers) AddUserDefaultHandler(c echo.Context) error {
 //	@Router			/quicklaunch/defaults/user/{id} [get]
 func (h *Handlers) GetUserDefaultHandler(c echo.Context) error {
 	id := c.Param("id")
-	user := c.QueryParam("user")
-	if user == "" {
-		return echo.NewHTTPError(http.StatusBadRequest, "user query parameter is required")
+	user, err := requireUser(c)
+	if err != nil {
+		return err
 	}
 
 	ud, err := h.DB.GetUserDefault(user, id)
@@ -78,9 +78,9 @@ func (h *Handlers) GetUserDefaultHandler(c echo.Context) error {
 //	@Failure		500		{object}	common.ErrorResponse
 //	@Router			/quicklaunch/defaults/user [get]
 func (h *Handlers) GetAllUserDefaultsHandler(c echo.Context) error {
-	user := c.QueryParam("user")
-	if user == "" {
-		return echo.NewHTTPError(http.StatusBadRequest, "user query parameter is required")
+	user, err := requireUser(c)
+	if err != nil {
+		return err
 	}
 
 	uds, err := h.DB.GetAllUserDefaults(user)
@@ -107,9 +107,9 @@ func (h *Handlers) GetAllUserDefaultsHandler(c echo.Context) error {
 //	@Router			/quicklaunch/defaults/user/{id} [patch]
 func (h *Handlers) UpdateUserDefaultHandler(c echo.Context) error {
 	id := c.Param("id")
-	user := c.QueryParam("user")
-	if user == "" {
-		return echo.NewHTTPError(http.StatusBadRequest, "user query parameter is required")
+	user, err := requireUser(c)
+	if err != nil {
+		return err
 	}
 
 	var update db.UpdateQuickLaunchUserDefaultRequest
@@ -138,9 +138,9 @@ func (h *Handlers) UpdateUserDefaultHandler(c echo.Context) error {
 //	@Router			/quicklaunch/defaults/user/{id} [delete]
 func (h *Handlers) DeleteUserDefaultHandler(c echo.Context) error {
 	id := c.Param("id")
-	user := c.QueryParam("user")
-	if user == "" {
-		return echo.NewHTTPError(http.StatusBadRequest, "user query parameter is required")
+	user, err := requireUser(c)
+	if err != nil {
+		return err
 	}
 
 	if err := h.DB.DeleteUserDefault(user, id); err != nil {

@@ -27,6 +27,16 @@ func NewHandlers(database *db.Database, appsClient *clients.AppsClient, dataInfo
 
 const systemID = "de"
 
+// requireUser extracts the "user" query parameter from the request,
+// returning an HTTP 400 error if it is missing.
+func requireUser(c echo.Context) (string, error) {
+	user := c.QueryParam("user")
+	if user == "" {
+		return "", echo.NewHTTPError(http.StatusBadRequest, "user query parameter is required")
+	}
+	return user, nil
+}
+
 // AddQuickLaunchHandler handles creating a new quick launch.
 //
 //	@Summary		Add a Quick Launch
@@ -41,9 +51,9 @@ const systemID = "de"
 //	@Failure		500		{object}	common.ErrorResponse
 //	@Router			/quicklaunches [post]
 func (h *Handlers) AddQuickLaunchHandler(c echo.Context) error {
-	user := c.QueryParam("user")
-	if user == "" {
-		return echo.NewHTTPError(http.StatusBadRequest, "user query parameter is required")
+	user, err := requireUser(c)
+	if err != nil {
+		return err
 	}
 
 	var nql db.NewQuickLaunch
@@ -52,8 +62,7 @@ func (h *Handlers) AddQuickLaunchHandler(c echo.Context) error {
 	}
 
 	// Fetch app to validate and get version_id if needed
-	var app map[string]interface{}
-	var err error
+	var app map[string]any
 	if nql.AppVersionID != "" {
 		app, err = h.AppsClient.GetAppVersion(user, systemID, nql.AppID, nql.AppVersionID)
 	} else {
@@ -69,11 +78,11 @@ func (h *Handlers) AddQuickLaunchHandler(c echo.Context) error {
 	}
 
 	// Validate submission
-	var submissionMap map[string]interface{}
+	var submissionMap map[string]any
 	if err := json.Unmarshal(nql.Submission, &submissionMap); err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid submission JSON")
 	}
-	config, _ := submissionMap["config"].(map[string]interface{})
+	config, _ := submissionMap["config"].(map[string]any)
 
 	valReq := &clients.ValidationRequest{
 		App:      app,
@@ -105,9 +114,9 @@ func (h *Handlers) AddQuickLaunchHandler(c echo.Context) error {
 //	@Failure		500		{object}	common.ErrorResponse
 //	@Router			/quicklaunches [get]
 func (h *Handlers) GetAllQuickLaunchesHandler(c echo.Context) error {
-	user := c.QueryParam("user")
-	if user == "" {
-		return echo.NewHTTPError(http.StatusBadRequest, "user query parameter is required")
+	user, err := requireUser(c)
+	if err != nil {
+		return err
 	}
 
 	qls, err := h.DB.GetAllQuickLaunches(user)
@@ -132,9 +141,9 @@ func (h *Handlers) GetAllQuickLaunchesHandler(c echo.Context) error {
 //	@Router			/quicklaunches/apps/{id} [get]
 func (h *Handlers) GetQuickLaunchesByAppHandler(c echo.Context) error {
 	appID := c.Param("id")
-	user := c.QueryParam("user")
-	if user == "" {
-		return echo.NewHTTPError(http.StatusBadRequest, "user query parameter is required")
+	user, err := requireUser(c)
+	if err != nil {
+		return err
 	}
 
 	qls, err := h.DB.GetQuickLaunchesByApp(appID, user)
@@ -159,9 +168,9 @@ func (h *Handlers) GetQuickLaunchesByAppHandler(c echo.Context) error {
 //	@Router			/quicklaunches/{id} [get]
 func (h *Handlers) GetQuickLaunchHandler(c echo.Context) error {
 	id := c.Param("id")
-	user := c.QueryParam("user")
-	if user == "" {
-		return echo.NewHTTPError(http.StatusBadRequest, "user query parameter is required")
+	user, err := requireUser(c)
+	if err != nil {
+		return err
 	}
 
 	ql, err := h.DB.GetQuickLaunch(id, user)
@@ -188,9 +197,9 @@ func (h *Handlers) GetQuickLaunchHandler(c echo.Context) error {
 //	@Router			/quicklaunches/{id} [patch]
 func (h *Handlers) UpdateQuickLaunchHandler(c echo.Context) error {
 	id := c.Param("id")
-	user := c.QueryParam("user")
-	if user == "" {
-		return echo.NewHTTPError(http.StatusBadRequest, "user query parameter is required")
+	user, err := requireUser(c)
+	if err != nil {
+		return err
 	}
 
 	var uql db.UpdateQuickLaunchRequest
@@ -219,7 +228,7 @@ func (h *Handlers) UpdateQuickLaunchHandler(c echo.Context) error {
 	}
 
 	// Determine the submission config for validation
-	var submissionForValidation map[string]interface{}
+	var submissionForValidation map[string]any
 	if uql.Submission != nil {
 		merged, merr := h.DB.MergeSubmission(id, user, *uql.Submission)
 		if merr != nil {
@@ -229,7 +238,7 @@ func (h *Handlers) UpdateQuickLaunchHandler(c echo.Context) error {
 	} else {
 		json.Unmarshal(existing.Submission, &submissionForValidation) //nolint:errcheck
 	}
-	config, _ := submissionForValidation["config"].(map[string]interface{})
+	config, _ := submissionForValidation["config"].(map[string]any)
 
 	isPublic := existing.IsPublic
 	if uql.IsPublic != nil {
@@ -267,9 +276,9 @@ func (h *Handlers) UpdateQuickLaunchHandler(c echo.Context) error {
 //	@Router			/quicklaunches/{id} [delete]
 func (h *Handlers) DeleteQuickLaunchHandler(c echo.Context) error {
 	id := c.Param("id")
-	user := c.QueryParam("user")
-	if user == "" {
-		return echo.NewHTTPError(http.StatusBadRequest, "user query parameter is required")
+	user, err := requireUser(c)
+	if err != nil {
+		return err
 	}
 
 	if err := h.DB.DeleteQuickLaunch(id, user); err != nil {
@@ -287,15 +296,15 @@ func (h *Handlers) DeleteQuickLaunchHandler(c echo.Context) error {
 //	@Produce		json
 //	@Param			id		path		string	true	"Quick Launch ID"
 //	@Param			user	query		string	true	"Username"
-//	@Success		200		{object}	map[string]interface{}
+//	@Success		200		{object}	map[string]any
 //	@Failure		400		{object}	common.ErrorResponse
 //	@Failure		404		{object}	common.ErrorResponse
 //	@Router			/quicklaunches/{id}/app-info [get]
 func (h *Handlers) QuickLaunchAppInfoHandler(c echo.Context) error {
 	id := c.Param("id")
-	user := c.QueryParam("user")
-	if user == "" {
-		return echo.NewHTTPError(http.StatusBadRequest, "user query parameter is required")
+	user, err := requireUser(c)
+	if err != nil {
+		return err
 	}
 
 	ql, err := h.DB.GetQuickLaunch(id, user)
@@ -308,7 +317,7 @@ func (h *Handlers) QuickLaunchAppInfoHandler(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to get app version: "+err.Error())
 	}
 
-	var submission map[string]interface{}
+	var submission map[string]any
 	if err := json.Unmarshal(ql.Submission, &submission); err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to parse submission: "+err.Error())
 	}

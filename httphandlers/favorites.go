@@ -26,9 +26,9 @@ type NewQuickLaunchFavoriteRequest struct {
 //	@Failure		500		{object}	common.ErrorResponse
 //	@Router			/quicklaunch/favorites [post]
 func (h *Handlers) AddFavoriteHandler(c echo.Context) error {
-	user := c.QueryParam("user")
-	if user == "" {
-		return echo.NewHTTPError(http.StatusBadRequest, "user query parameter is required")
+	user, err := requireUser(c)
+	if err != nil {
+		return err
 	}
 
 	var req NewQuickLaunchFavoriteRequest
@@ -58,9 +58,9 @@ func (h *Handlers) AddFavoriteHandler(c echo.Context) error {
 //	@Router			/quicklaunch/favorites/{id} [get]
 func (h *Handlers) GetFavoriteHandler(c echo.Context) error {
 	id := c.Param("id")
-	user := c.QueryParam("user")
-	if user == "" {
-		return echo.NewHTTPError(http.StatusBadRequest, "user query parameter is required")
+	user, err := requireUser(c)
+	if err != nil {
+		return err
 	}
 
 	fav, err := h.DB.GetFavorite(user, id)
@@ -83,9 +83,9 @@ func (h *Handlers) GetFavoriteHandler(c echo.Context) error {
 //	@Failure		500		{object}	common.ErrorResponse
 //	@Router			/quicklaunch/favorites [get]
 func (h *Handlers) GetAllFavoritesHandler(c echo.Context) error {
-	user := c.QueryParam("user")
-	if user == "" {
-		return echo.NewHTTPError(http.StatusBadRequest, "user query parameter is required")
+	user, err := requireUser(c)
+	if err != nil {
+		return err
 	}
 
 	favs, err := h.DB.GetAllFavorites(user)
@@ -109,9 +109,9 @@ func (h *Handlers) GetAllFavoritesHandler(c echo.Context) error {
 //	@Router			/quicklaunch/favorites/{id} [delete]
 func (h *Handlers) DeleteFavoriteHandler(c echo.Context) error {
 	id := c.Param("id")
-	user := c.QueryParam("user")
-	if user == "" {
-		return echo.NewHTTPError(http.StatusBadRequest, "user query parameter is required")
+	user, err := requireUser(c)
+	if err != nil {
+		return err
 	}
 
 	if err := h.DB.DeleteFavorite(user, id); err != nil {

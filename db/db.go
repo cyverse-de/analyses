@@ -3,6 +3,7 @@ package db
 import (
 	"encoding/json"
 	"fmt"
+	"maps"
 	"strings"
 
 	"github.com/google/uuid"
@@ -277,19 +278,17 @@ func (d *Database) MergeSubmission(qlID, user string, newSubmission json.RawMess
 		return nil, err
 	}
 
-	var oldMap map[string]interface{}
+	var oldMap map[string]any
 	if err := json.Unmarshal(oldSub.Submission, &oldMap); err != nil {
 		return nil, err
 	}
 
-	var newMap map[string]interface{}
+	var newMap map[string]any
 	if err := json.Unmarshal(newSubmission, &newMap); err != nil {
 		return nil, err
 	}
 
-	for k, v := range newMap {
-		oldMap[k] = v
-	}
+	maps.Copy(oldMap, newMap)
 
 	merged, err := json.Marshal(oldMap)
 	if err != nil {
@@ -352,7 +351,7 @@ func (d *Database) UpdateQuickLaunch(id, user string, uql *UpdateQuickLaunchRequ
 
 	// Build dynamic UPDATE using positional args
 	query := "UPDATE quick_launches SET submission_id = $1, creator = $2"
-	args := []interface{}{newSubmissionID, targetCreator}
+	args := []any{newSubmissionID, targetCreator}
 	argIdx := 3
 
 	if uql.Name != nil {
@@ -883,7 +882,7 @@ func (d *Database) GetConcurrentJobLimit(username string) (*ConcurrentJobLimit, 
 		return nil, err
 	}
 	if len(limits) == 0 {
-		return nil, fmt.Errorf("no job limit found for user: %s", username)
+		return nil, fmt.Errorf("job limit not found: %s", username)
 	}
 	return &limits[0], nil
 }
@@ -944,7 +943,7 @@ func (d *Database) getConcurrentJobLimitTx(tx *sqlx.Tx, username string) (*Concu
 		return nil, err
 	}
 	if len(limits) == 0 {
-		return nil, fmt.Errorf("no job limit found for user: %s", username)
+		return nil, fmt.Errorf("job limit not found: %s", username)
 	}
 	return &limits[0], nil
 }

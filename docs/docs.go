@@ -1177,7 +1177,7 @@ const docTemplate = `{
             "properties": {
                 "details": {
                     "type": "object",
-                    "additionalProperties": true
+                    "additionalProperties": {}
                 },
                 "error_code": {
                     "type": "string"

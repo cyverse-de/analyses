@@ -21,9 +21,9 @@ import (
 //	@Failure		500		{object}	common.ErrorResponse
 //	@Router			/quicklaunch/defaults/global [post]
 func (h *Handlers) AddGlobalDefaultHandler(c echo.Context) error {
-	user := c.QueryParam("user")
-	if user == "" {
-		return echo.NewHTTPError(http.StatusBadRequest, "user query parameter is required")
+	user, err := requireUser(c)
+	if err != nil {
+		return err
 	}
 
 	var ngd db.NewQuickLaunchGlobalDefault
@@ -53,9 +53,9 @@ func (h *Handlers) AddGlobalDefaultHandler(c echo.Context) error {
 //	@Router			/quicklaunch/defaults/global/{id} [get]
 func (h *Handlers) GetGlobalDefaultHandler(c echo.Context) error {
 	id := c.Param("id")
-	user := c.QueryParam("user")
-	if user == "" {
-		return echo.NewHTTPError(http.StatusBadRequest, "user query parameter is required")
+	user, err := requireUser(c)
+	if err != nil {
+		return err
 	}
 
 	gd, err := h.DB.GetGlobalDefault(user, id)
@@ -78,9 +78,9 @@ func (h *Handlers) GetGlobalDefaultHandler(c echo.Context) error {
 //	@Failure		500		{object}	common.ErrorResponse
 //	@Router			/quicklaunch/defaults/global [get]
 func (h *Handlers) GetAllGlobalDefaultsHandler(c echo.Context) error {
-	user := c.QueryParam("user")
-	if user == "" {
-		return echo.NewHTTPError(http.StatusBadRequest, "user query parameter is required")
+	user, err := requireUser(c)
+	if err != nil {
+		return err
 	}
 
 	gds, err := h.DB.GetAllGlobalDefaults(user)
@@ -107,9 +107,9 @@ func (h *Handlers) GetAllGlobalDefaultsHandler(c echo.Context) error {
 //	@Router			/quicklaunch/defaults/global/{id} [patch]
 func (h *Handlers) UpdateGlobalDefaultHandler(c echo.Context) error {
 	id := c.Param("id")
-	user := c.QueryParam("user")
-	if user == "" {
-		return echo.NewHTTPError(http.StatusBadRequest, "user query parameter is required")
+	user, err := requireUser(c)
+	if err != nil {
+		return err
 	}
 
 	var update db.UpdateQuickLaunchGlobalDefaultRequest
@@ -138,9 +138,9 @@ func (h *Handlers) UpdateGlobalDefaultHandler(c echo.Context) error {
 //	@Router			/quicklaunch/defaults/global/{id} [delete]
 func (h *Handlers) DeleteGlobalDefaultHandler(c echo.Context) error {
 	id := c.Param("id")
-	user := c.QueryParam("user")
-	if user == "" {
-		return echo.NewHTTPError(http.StatusBadRequest, "user query parameter is required")
+	user, err := requireUser(c)
+	if err != nil {
+		return err
 	}
 
 	if err := h.DB.DeleteGlobalDefault(user, id); err != nil {
