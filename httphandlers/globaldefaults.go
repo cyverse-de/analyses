@@ -144,6 +144,9 @@ func (h *Handlers) DeleteGlobalDefaultHandler(c echo.Context) error {
 	}
 
 	if err := h.DB.DeleteGlobalDefault(user, id); err != nil {
+		if db.IsNotFound(err) {
+			return echo.NewHTTPError(http.StatusNotFound, err.Error())
+		}
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 

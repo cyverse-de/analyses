@@ -115,6 +115,9 @@ func (h *Handlers) DeleteFavoriteHandler(c echo.Context) error {
 	}
 
 	if err := h.DB.DeleteFavorite(user, id); err != nil {
+		if db.IsNotFound(err) {
+			return echo.NewHTTPError(http.StatusNotFound, err.Error())
+		}
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 

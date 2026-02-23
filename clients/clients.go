@@ -32,8 +32,11 @@ func NewAppsClient(baseURL string) *AppsClient {
 	return &AppsClient{BaseURL: strings.TrimRight(baseURL, "/")}
 }
 
-func (c *AppsClient) buildURL(components []string, username string, query map[string]string) string {
-	u, _ := url.Parse(c.BaseURL)
+func (c *AppsClient) buildURL(components []string, username string, query map[string]string) (string, error) {
+	u, err := url.Parse(c.BaseURL)
+	if err != nil {
+		return "", fmt.Errorf("invalid base URL %q: %w", c.BaseURL, err)
+	}
 	u.Path = strings.Join(append([]string{u.Path}, components...), "/")
 	q := u.Query()
 	q.Set("user", StripDomain(username))
@@ -41,18 +44,24 @@ func (c *AppsClient) buildURL(components []string, username string, query map[st
 		q.Set(k, v)
 	}
 	u.RawQuery = q.Encode()
-	return u.String()
+	return u.String(), nil
 }
 
 // GetApp retrieves an app definition from the apps service.
 func (c *AppsClient) GetApp(user, systemID, appID string) (map[string]interface{}, error) {
-	reqURL := c.buildURL([]string{"apps", systemID, appID}, user, nil)
+	reqURL, err := c.buildURL([]string{"apps", systemID, appID}, user, nil)
+	if err != nil {
+		return nil, err
+	}
 	return doJSONGet(reqURL)
 }
 
 // GetAppVersion retrieves a specific app version from the apps service.
 func (c *AppsClient) GetAppVersion(user, systemID, appID, versionID string) (map[string]interface{}, error) {
-	reqURL := c.buildURL([]string{"apps", systemID, appID, "versions", versionID}, user, nil)
+	reqURL, err := c.buildURL([]string{"apps", systemID, appID, "versions", versionID}, user, nil)
+	if err != nil {
+		return nil, err
+	}
 	return doJSONGet(reqURL)
 }
 
@@ -66,8 +75,11 @@ func NewDataInfoClient(baseURL string) *DataInfoClient {
 	return &DataInfoClient{BaseURL: strings.TrimRight(baseURL, "/")}
 }
 
-func (c *DataInfoClient) buildURL(components []string, username string, query map[string]string) string {
-	u, _ := url.Parse(c.BaseURL)
+func (c *DataInfoClient) buildURL(components []string, username string, query map[string]string) (string, error) {
+	u, err := url.Parse(c.BaseURL)
+	if err != nil {
+		return "", fmt.Errorf("invalid base URL %q: %w", c.BaseURL, err)
+	}
 	u.Path = strings.Join(append([]string{u.Path}, components...), "/")
 	q := u.Query()
 	q.Set("user", StripDomain(username))
@@ -75,7 +87,7 @@ func (c *DataInfoClient) buildURL(components []string, username string, query ma
 		q.Set(k, v)
 	}
 	u.RawQuery = q.Encode()
-	return u.String()
+	return u.String(), nil
 }
 
 // PathsAccessibleBy checks if paths are accessible by the given user.
@@ -84,7 +96,10 @@ func (c *DataInfoClient) PathsAccessibleBy(paths []string, user string) (bool, e
 		return true, nil
 	}
 
-	reqURL := c.buildURL([]string{"path-info"}, user, nil)
+	reqURL, err := c.buildURL([]string{"path-info"}, user, nil)
+	if err != nil {
+		return false, err
+	}
 	body := map[string]interface{}{"paths": paths}
 	bodyBytes, err := json.Marshal(body)
 	if err != nil {

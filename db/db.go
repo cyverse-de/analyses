@@ -3,10 +3,21 @@ package db
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"
 )
+
+// IsNotFound returns true if the error indicates a resource was not found.
+func IsNotFound(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := err.Error()
+	return strings.HasSuffix(msg, "not found") ||
+		strings.Contains(msg, "not found:")
+}
 
 // Database provides access to the analyses database.
 type Database struct {
@@ -73,8 +84,18 @@ func (d *Database) UpdateSubmission(id string, submission json.RawMessage) (*Sub
 
 // DeleteSubmission deletes a submission by ID.
 func (d *Database) DeleteSubmission(id string) error {
-	_, err := d.db.Exec("DELETE FROM submissions WHERE id = $1", id)
-	return err
+	result, err := d.db.Exec("DELETE FROM submissions WHERE id = $1", id)
+	if err != nil {
+		return err
+	}
+	rows, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return fmt.Errorf("submission not found: %s", id)
+	}
+	return nil
 }
 
 // QuickLaunch represents a quick launch record.
@@ -490,11 +511,21 @@ func (d *Database) DeleteFavorite(user, favID string) error {
 		return err
 	}
 
-	_, err = d.db.Exec(
+	result, err := d.db.Exec(
 		"DELETE FROM quick_launch_favorites WHERE id = $1 AND user_id = $2",
 		favID, userID,
 	)
-	return err
+	if err != nil {
+		return err
+	}
+	rows, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return fmt.Errorf("favorite not found: %s", favID)
+	}
+	return nil
 }
 
 // QuickLaunchUserDefault represents a quick launch user default.
@@ -596,11 +627,11 @@ func (d *Database) UpdateUserDefault(id, user string, update *UpdateQuickLaunchU
 		return nil, err
 	}
 
-	// Verify it exists
+	// Verify it exists and is owned by user
 	var exists bool
 	err = d.db.QueryRow(
-		"SELECT EXISTS(SELECT 1 FROM quick_launch_user_defaults WHERE id = $1)",
-		id,
+		"SELECT EXISTS(SELECT 1 FROM quick_launch_user_defaults WHERE id = $1 AND user_id = $2)",
+		id, userID,
 	).Scan(&exists)
 	if err != nil || !exists {
 		return nil, fmt.Errorf("user default not found: %s", id)
@@ -636,11 +667,21 @@ func (d *Database) DeleteUserDefault(user, id string) error {
 		return err
 	}
 
-	_, err = d.db.Exec(
+	result, err := d.db.Exec(
 		"DELETE FROM quick_launch_user_defaults WHERE id = $1 AND user_id = $2",
 		id, userID,
 	)
-	return err
+	if err != nil {
+		return err
+	}
+	rows, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return fmt.Errorf("user default not found: %s", id)
+	}
+	return nil
 }
 
 // QuickLaunchGlobalDefault represents a quick launch global default.
@@ -764,7 +805,7 @@ func (d *Database) DeleteGlobalDefault(user, id string) error {
 		return err
 	}
 
-	_, err = d.db.Exec(
+	result, err := d.db.Exec(
 		`DELETE FROM quick_launch_global_defaults
 		  WHERE id = $1
 		    AND quick_launch_id IN (
@@ -774,7 +815,17 @@ func (d *Database) DeleteGlobalDefault(user, id string) error {
 		    )`,
 		id, userID,
 	)
-	return err
+	if err != nil {
+		return err
+	}
+	rows, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return fmt.Errorf("global default not found: %s", id)
+	}
+	return nil
 }
 
 // ConcurrentJobLimit represents a concurrent job limit record.
