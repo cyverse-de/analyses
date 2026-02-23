@@ -1,21 +1,39 @@
-FROM clojure:temurin-25-lein-trixie-slim
+### Build stage
+FROM golang:1.25 AS builder
 
-WORKDIR /usr/src/app
+WORKDIR /build
 
-CMD ["--help"]
+# Install swag for swagger documentation generation
+RUN go install github.com/swaggo/swag/cmd/swag@latest
 
-COPY conf/main/logback.xml /usr/src/app/
+# Copy go mod files first for better caching
+COPY go.mod go.sum ./
+RUN go mod download
 
-COPY project.clj /usr/src/app/
-RUN lein deps
+# Copy source code
+COPY . .
 
-RUN ln -s "/opt/java/openjdk/bin/java" "/bin/analyses"
+# Build the binary
+ENV CGO_ENABLED=0
+ENV GOOS=linux
+ENV GOARCH=amd64
 
-ENV OTEL_TRACES_EXPORTER none
+RUN go build -ldflags='-w -s' -o analyses cmd/analyses/*.go
 
-COPY . /usr/src/app
+# Generate swagger documentation using swag (matches Justfile)
+RUN swag init --parseDependency -g app.go -d cmd/analyses/,httphandlers/,common/
 
-RUN lein uberjar && \
-    cp target/analyses-standalone.jar .
+### Final stage - minimal runtime image
+FROM gcr.io/distroless/static-debian12:nonroot
 
-ENTRYPOINT ["analyses", "-Dlogback.configurationFile=/usr/src/app/logback.xml", "-cp", ".:analyses-standalone.jar:/", "analyses.core"]
+WORKDIR /
+
+# Copy the binary from builder
+COPY --from=builder /build/analyses /analyses
+
+# Copy swagger documentation
+COPY --from=builder /build/docs/swagger.json /docs/swagger.json
+
+EXPOSE 60000
+
+ENTRYPOINT ["/analyses"]

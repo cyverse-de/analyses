@@ -1,0 +1,27 @@
+# Analyses service configuration template
+#
+# This file is loaded via the --config flag (default: /etc/cyverse/de/configs/service.yml).
+# All values can also be overridden by environment variables prefixed with DISCOENV_
+# (configurable via --env-prefix). Nested keys use underscores, e.g.:
+#   db.uri  ->  DISCOENV_DB_URI
+#
+# Additional CLI flags:
+#   --port          Listen port (default: 60000)
+#   --log-level     One of trace, debug, info, warn, error, fatal, panic (default: warn)
+#   --dotenv-path   Path to a .env file for additional overrides
+#   --env-prefix    Prefix for environment variable overrides (default: DISCOENV_)
+
+# Database connection string (required).
+# Must be a valid PostgreSQL connection URI.
+db:
+  uri: "postgresql://de:notprod@dedb:5432/de?sslmode=disable"
+
+# Base URL for the apps service.
+# Used to fetch app definitions and validate quick launch submissions.
+apps:
+  base: "http://apps"
+
+# Base URL for the data-info service.
+# Used to verify that input paths are accessible by the submitting user.
+data-info:
+  base: "http://data-info"
