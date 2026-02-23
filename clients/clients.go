@@ -8,7 +8,12 @@ import (
 	"net/url"
 	"regexp"
 	"strings"
+	"time"
 )
+
+// httpClient is a shared HTTP client with a reasonable timeout for
+// inter-service calls to apps and data-info.
+var httpClient = &http.Client{Timeout: 30 * time.Second}
 
 var domainSuffix = regexp.MustCompile(`@.*$`)
 
@@ -86,7 +91,7 @@ func (c *DataInfoClient) PathsAccessibleBy(paths []string, user string) (bool, e
 		return false, err
 	}
 
-	resp, err := http.Post(reqURL, "application/json", strings.NewReader(string(bodyBytes)))
+	resp, err := httpClient.Post(reqURL, "application/json", strings.NewReader(string(bodyBytes)))
 	if err != nil {
 		return false, err
 	}
@@ -141,17 +146,22 @@ func ValidateSubmission(appsClient *AppsClient, dataInfoClient *DataInfoClient, 
 			}
 
 			if isInputType(paramType) {
-				value, _ := config[paramID].(string)
 				u := user
 				if isPublic {
 					u = publicUser
 				}
-				accessible, err := dataInfoClient.PathsAccessibleBy([]string{value}, u)
+
+				paths := extractPaths(config[paramID])
+				if len(paths) == 0 {
+					continue
+				}
+
+				accessible, err := dataInfoClient.PathsAccessibleBy(paths, u)
 				if err != nil {
 					return fmt.Errorf("error checking path accessibility: %w", err)
 				}
 				if !accessible {
-					return fmt.Errorf("path not accessible by user %s: %s", u, value)
+					return fmt.Errorf("paths not accessible by user %s: %v", u, paths)
 				}
 			}
 		}
@@ -162,6 +172,28 @@ func ValidateSubmission(appsClient *AppsClient, dataInfoClient *DataInfoClient, 
 
 func isInputType(t string) bool {
 	return t == "FileInput" || t == "FolderInput" || t == "MultiFileSelector"
+}
+
+// extractPaths extracts path strings from a config value, which may be a single
+// string (FileInput, FolderInput) or an array of strings (MultiFileSelector).
+func extractPaths(val interface{}) []string {
+	switch v := val.(type) {
+	case string:
+		if v == "" {
+			return nil
+		}
+		return []string{v}
+	case []interface{}:
+		paths := make([]string, 0, len(v))
+		for _, item := range v {
+			if s, ok := item.(string); ok && s != "" {
+				paths = append(paths, s)
+			}
+		}
+		return paths
+	default:
+		return nil
+	}
 }
 
 // QuickLaunchAppInfo populates app params from a submission's config.
@@ -210,7 +242,7 @@ func QuickLaunchAppInfo(submission, app map[string]interface{}, sysID string) ma
 }
 
 func doJSONGet(reqURL string) (map[string]interface{}, error) {
-	resp, err := http.Get(reqURL)
+	resp, err := httpClient.Get(reqURL)
 	if err != nil {
 		return nil, fmt.Errorf("HTTP request failed: %w", err)
 	}

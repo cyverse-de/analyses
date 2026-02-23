@@ -1,10 +1,13 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
-	"net/http"
+	"os"
+	"os/signal"
 	"strconv"
+	"time"
 
 	"github.com/cyverse-de/analyses/common"
 	"github.com/cyverse-de/go-mod/cfg"
@@ -78,7 +81,24 @@ func main() {
 	log.Info("Registering routes and initializing handlers...")
 	app := NewAnalysesApp(dbconn, appsBaseURL, dataInfoBaseURL)
 
-	log.Infof("Listening on port %d", *listenPort)
-	log.Info("Service started successfully")
-	log.Fatal(http.ListenAndServe(fmt.Sprintf(":%s", strconv.Itoa(*listenPort)), app.router))
+	addr := fmt.Sprintf(":%s", strconv.Itoa(*listenPort))
+
+	go func() {
+		log.Infof("Listening on port %d", *listenPort)
+		if err := app.router.Start(addr); err != nil {
+			log.Infof("Shutting down the server: %v", err)
+		}
+	}()
+
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, os.Interrupt)
+	<-quit
+
+	log.Info("Received interrupt signal, shutting down gracefully...")
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	if err := app.router.Shutdown(ctx); err != nil {
+		log.Fatal(err)
+	}
+	log.Info("Server stopped")
 }

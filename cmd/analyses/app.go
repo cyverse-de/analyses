@@ -9,6 +9,7 @@ import (
 	"github.com/cyverse-de/analyses/httphandlers"
 	"github.com/jmoiron/sqlx"
 	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v4/middleware"
 
 	_ "github.com/cyverse-de/analyses/docs"
 	echoSwagger "github.com/swaggo/echo-swagger"
@@ -43,6 +44,8 @@ func NewAnalysesApp(database *sqlx.DB, appsBaseURL, dataInfoBaseURL string) *Ana
 		handlers: handlers,
 	}
 
+	app.router.Pre(middleware.RemoveTrailingSlash())
+
 	app.router.HTTPErrorHandler = func(err error, c echo.Context) {
 		code := http.StatusInternalServerError
 		var body interface{}
@@ -71,35 +74,24 @@ func NewAnalysesApp(database *sqlx.DB, appsBaseURL, dataInfoBaseURL string) *Ana
 	// Quick Launches
 	ql := app.router.Group("/quicklaunches")
 	ql.POST("", handlers.AddQuickLaunchHandler)
-	ql.POST("/", handlers.AddQuickLaunchHandler)
 	ql.GET("", handlers.GetAllQuickLaunchesHandler)
-	ql.GET("/", handlers.GetAllQuickLaunchesHandler)
 	ql.GET("/apps/:id", handlers.GetQuickLaunchesByAppHandler)
-	ql.GET("/apps/:id/", handlers.GetQuickLaunchesByAppHandler)
 	ql.GET("/:id", handlers.GetQuickLaunchHandler)
-	ql.GET("/:id/", handlers.GetQuickLaunchHandler)
 	ql.PATCH("/:id", handlers.UpdateQuickLaunchHandler)
-	ql.PATCH("/:id/", handlers.UpdateQuickLaunchHandler)
 	ql.DELETE("/:id", handlers.DeleteQuickLaunchHandler)
-	ql.DELETE("/:id/", handlers.DeleteQuickLaunchHandler)
 	ql.GET("/:id/app-info", handlers.QuickLaunchAppInfoHandler)
-	ql.GET("/:id/app-info/", handlers.QuickLaunchAppInfoHandler)
 
 	// Quick Launch Favorites
 	fav := app.router.Group("/quicklaunch/favorites")
 	fav.POST("", handlers.AddFavoriteHandler)
-	fav.POST("/", handlers.AddFavoriteHandler)
 	fav.GET("", handlers.GetAllFavoritesHandler)
-	fav.GET("/", handlers.GetAllFavoritesHandler)
 	fav.GET("/:id", handlers.GetFavoriteHandler)
 	fav.DELETE("/:id", handlers.DeleteFavoriteHandler)
 
 	// Quick Launch User Defaults
 	ud := app.router.Group("/quicklaunch/defaults/user")
 	ud.POST("", handlers.AddUserDefaultHandler)
-	ud.POST("/", handlers.AddUserDefaultHandler)
 	ud.GET("", handlers.GetAllUserDefaultsHandler)
-	ud.GET("/", handlers.GetAllUserDefaultsHandler)
 	ud.GET("/:id", handlers.GetUserDefaultHandler)
 	ud.PATCH("/:id", handlers.UpdateUserDefaultHandler)
 	ud.DELETE("/:id", handlers.DeleteUserDefaultHandler)
@@ -107,9 +99,7 @@ func NewAnalysesApp(database *sqlx.DB, appsBaseURL, dataInfoBaseURL string) *Ana
 	// Quick Launch Global Defaults
 	gd := app.router.Group("/quicklaunch/defaults/global")
 	gd.POST("", handlers.AddGlobalDefaultHandler)
-	gd.POST("/", handlers.AddGlobalDefaultHandler)
 	gd.GET("", handlers.GetAllGlobalDefaultsHandler)
-	gd.GET("/", handlers.GetAllGlobalDefaultsHandler)
 	gd.GET("/:id", handlers.GetGlobalDefaultHandler)
 	gd.PATCH("/:id", handlers.UpdateGlobalDefaultHandler)
 	gd.DELETE("/:id", handlers.DeleteGlobalDefaultHandler)
@@ -117,13 +107,9 @@ func NewAnalysesApp(database *sqlx.DB, appsBaseURL, dataInfoBaseURL string) *Ana
 	// Settings
 	settings := app.router.Group("/settings/concurrent-job-limits")
 	settings.GET("", handlers.ListConcurrentJobLimitsHandler)
-	settings.GET("/", handlers.ListConcurrentJobLimitsHandler)
 	settings.GET("/:username", handlers.GetConcurrentJobLimitHandler)
-	settings.GET("/:username/", handlers.GetConcurrentJobLimitHandler)
 	settings.PUT("/:username", handlers.SetConcurrentJobLimitHandler)
-	settings.PUT("/:username/", handlers.SetConcurrentJobLimitHandler)
 	settings.DELETE("/:username", handlers.RemoveConcurrentJobLimitHandler)
-	settings.DELETE("/:username/", handlers.RemoveConcurrentJobLimitHandler)
 
 	return app
 }

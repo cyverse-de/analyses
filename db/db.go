@@ -295,7 +295,14 @@ func (d *Database) UpdateQuickLaunch(id, user string, uql *UpdateQuickLaunchRequ
 
 	// Handle submission merging
 	var newSubmissionID string
+	var oldSubmissionID string
 	if uql.Submission != nil {
+		unjoined, uerr := d.GetUnjoinedQuickLaunch(id, user)
+		if uerr != nil {
+			return nil, uerr
+		}
+		oldSubmissionID = unjoined.SubmissionID
+
 		merged, merr := d.MergeSubmission(id, user, *uql.Submission)
 		if merr != nil {
 			return nil, merr
@@ -360,21 +367,42 @@ func (d *Database) UpdateQuickLaunch(id, user string, uql *UpdateQuickLaunchRequ
 		return nil, err
 	}
 
+	// Clean up the old submission row if it was replaced.
+	if oldSubmissionID != "" && oldSubmissionID != newSubmissionID {
+		d.DeleteSubmission(oldSubmissionID) //nolint:errcheck
+	}
+
 	return d.GetQuickLaunch(id, user)
 }
 
-// DeleteQuickLaunch deletes a quick launch by ID.
+// DeleteQuickLaunch deletes a quick launch and its associated submission by ID.
 func (d *Database) DeleteQuickLaunch(id, user string) error {
 	userID, err := d.GetUserID(user)
 	if err != nil {
 		return err
 	}
 
+	// Look up the submission_id before deleting so we can clean it up.
+	var submissionID string
+	err = d.db.QueryRow(
+		"SELECT submission_id FROM quick_launches WHERE id = $1 AND creator = $2",
+		id, userID,
+	).Scan(&submissionID)
+	if err != nil {
+		// No matching row; nothing to delete.
+		return nil
+	}
+
 	_, err = d.db.Exec(
 		"DELETE FROM quick_launches WHERE id = $1 AND creator = $2",
 		id, userID,
 	)
-	return err
+	if err != nil {
+		return err
+	}
+
+	// Clean up the orphaned submission row.
+	return d.DeleteSubmission(submissionID)
 }
 
 // QuickLaunchFavorite represents a favorited quick launch.
