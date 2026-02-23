@@ -255,7 +255,8 @@ func (d *Database) GetUnjoinedQuickLaunch(id, user string) (*UnjoinedQuickLaunch
 
 	var uql UnjoinedQuickLaunch
 	err = d.db.QueryRowx(
-		"SELECT * FROM quick_launches WHERE id = $1 AND creator = $2",
+		`SELECT id, name, description, app_id, app_version_id, is_public, submission_id, creator
+		   FROM quick_launches WHERE id = $1 AND creator = $2`,
 		id, userID,
 	).StructScan(&uql)
 	if err != nil {

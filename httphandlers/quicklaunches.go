@@ -73,17 +73,15 @@ func (h *Handlers) AddQuickLaunchHandler(c echo.Context) error {
 	if err := json.Unmarshal(nql.Submission, &submissionMap); err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid submission JSON")
 	}
+	config, _ := submissionMap["config"].(map[string]interface{})
 
-	qlInfo := map[string]interface{}{
-		"quicklaunch": map[string]interface{}{
-			"is_public":  nql.IsPublic,
-			"submission": submissionMap,
-		},
-		"app":       app,
-		"system-id": systemID,
-		"user":      user,
+	valReq := &clients.ValidationRequest{
+		App:      app,
+		Config:   config,
+		IsPublic: nql.IsPublic,
+		User:     user,
 	}
-	if err := clients.ValidateSubmission(h.AppsClient, h.DataInfoClient, qlInfo); err != nil {
+	if err := clients.ValidateSubmission(h.AppsClient, h.DataInfoClient, valReq); err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
 	}
 
@@ -220,7 +218,7 @@ func (h *Handlers) UpdateQuickLaunchHandler(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, "failed to get app version: "+err.Error())
 	}
 
-	// Determine the submission for validation
+	// Determine the submission config for validation
 	var submissionForValidation map[string]interface{}
 	if uql.Submission != nil {
 		merged, merr := h.DB.MergeSubmission(id, user, *uql.Submission)
@@ -231,22 +229,20 @@ func (h *Handlers) UpdateQuickLaunchHandler(c echo.Context) error {
 	} else {
 		json.Unmarshal(existing.Submission, &submissionForValidation) //nolint:errcheck
 	}
+	config, _ := submissionForValidation["config"].(map[string]interface{})
 
 	isPublic := existing.IsPublic
 	if uql.IsPublic != nil {
 		isPublic = *uql.IsPublic
 	}
 
-	qlInfo := map[string]interface{}{
-		"quicklaunch": map[string]interface{}{
-			"is_public":  isPublic,
-			"submission": submissionForValidation,
-		},
-		"app":       app,
-		"system-id": systemID,
-		"user":      user,
+	valReq := &clients.ValidationRequest{
+		App:      app,
+		Config:   config,
+		IsPublic: isPublic,
+		User:     user,
 	}
-	if err := clients.ValidateSubmission(h.AppsClient, h.DataInfoClient, qlInfo); err != nil {
+	if err := clients.ValidateSubmission(h.AppsClient, h.DataInfoClient, valReq); err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
 	}
 

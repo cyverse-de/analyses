@@ -120,53 +120,75 @@ func (c *DataInfoClient) PathsAccessibleBy(paths []string, user string) (bool, e
 
 const publicUser = "public"
 
-// ValidateSubmission validates the submission config params against the app definition.
-func ValidateSubmission(appsClient *AppsClient, dataInfoClient *DataInfoClient, qlInfo map[string]interface{}) error {
-	quicklaunch, _ := qlInfo["quicklaunch"].(map[string]interface{})
-	app, _ := qlInfo["app"].(map[string]interface{})
-	user, _ := qlInfo["user"].(string)
+// AppParam represents a single parameter within an app parameter group.
+type AppParam struct {
+	ID           string      `json:"id"`
+	Type         string      `json:"type"`
+	Value        interface{} `json:"value,omitempty"`
+	DefaultValue interface{} `json:"defaultValue,omitempty"`
+}
 
-	if app == nil || quicklaunch == nil {
-		return nil
-	}
+// AppGroup represents a group of parameters in an app definition.
+type AppGroup struct {
+	Parameters []AppParam `json:"parameters"`
+}
 
-	submission, _ := quicklaunch["submission"].(map[string]interface{})
-	if submission == nil {
-		return nil
-	}
-	config, _ := submission["config"].(map[string]interface{})
-	if config == nil {
-		return nil
-	}
+// ValidationRequest holds the typed inputs for ValidateSubmission.
+type ValidationRequest struct {
+	App        map[string]interface{}
+	Config     map[string]interface{}
+	IsPublic   bool
+	User       string
+}
 
-	isPublic, _ := quicklaunch["is_public"].(bool)
-	groups, _ := app["groups"].([]interface{})
-
-	for _, g := range groups {
-		group, ok := g.(map[string]interface{})
+// extractAppGroups converts the untyped "groups" slice from an app definition
+// into typed AppGroup values.
+func extractAppGroups(app map[string]interface{}) []AppGroup {
+	rawGroups, _ := app["groups"].([]interface{})
+	groups := make([]AppGroup, 0, len(rawGroups))
+	for _, g := range rawGroups {
+		gm, ok := g.(map[string]interface{})
 		if !ok {
 			continue
 		}
-		params, _ := group["parameters"].([]interface{})
-		for _, p := range params {
-			param, ok := p.(map[string]interface{})
+		rawParams, _ := gm["parameters"].([]interface{})
+		params := make([]AppParam, 0, len(rawParams))
+		for _, p := range rawParams {
+			pm, ok := p.(map[string]interface{})
 			if !ok {
 				continue
 			}
-			paramID, _ := param["id"].(string)
-			paramType, _ := param["type"].(string)
+			id, _ := pm["id"].(string)
+			typ, _ := pm["type"].(string)
+			params = append(params, AppParam{ID: id, Type: typ, Value: pm["value"], DefaultValue: pm["defaultValue"]})
+		}
+		groups = append(groups, AppGroup{Parameters: params})
+	}
+	return groups
+}
 
-			if _, hasValue := config[paramID]; !hasValue {
+// ValidateSubmission validates the submission config params against the app definition.
+func ValidateSubmission(appsClient *AppsClient, dataInfoClient *DataInfoClient, req *ValidationRequest) error {
+	if req.App == nil || req.Config == nil {
+		return nil
+	}
+
+	groups := extractAppGroups(req.App)
+
+	for _, group := range groups {
+		for _, param := range group.Parameters {
+			val, hasValue := req.Config[param.ID]
+			if !hasValue {
 				continue
 			}
 
-			if isInputType(paramType) {
-				u := user
-				if isPublic {
+			if isInputType(param.Type) {
+				u := req.User
+				if req.IsPublic {
 					u = publicUser
 				}
 
-				paths := extractPaths(config[paramID])
+				paths := extractPaths(val)
 				if len(paths) == 0 {
 					continue
 				}
@@ -217,42 +239,36 @@ func QuickLaunchAppInfo(submission, app map[string]interface{}, sysID string) ma
 	debug, _ := submission["debug"].(bool)
 	app["debug"] = debug
 
-	groups, ok := app["groups"].([]interface{})
+	rawGroups, ok := app["groups"].([]interface{})
 	if !ok || config == nil {
 		return app
 	}
 
-	for i, g := range groups {
-		group, ok := g.(map[string]interface{})
-		if !ok {
-			continue
-		}
-		params, _ := group["parameters"].([]interface{})
-		for j, p := range params {
-			param, ok := p.(map[string]interface{})
-			if !ok {
+	groups := extractAppGroups(app)
+	for i, group := range groups {
+		gm := rawGroups[i].(map[string]interface{})
+		rawParams := gm["parameters"].([]interface{})
+		for j, param := range group.Parameters {
+			val, hasVal := config[param.ID]
+			if !hasVal {
 				continue
 			}
-			paramID, _ := param["id"].(string)
-			paramType, _ := param["type"].(string)
-
-			if val, hasVal := config[paramID]; hasVal {
-				if isInputType(paramType) {
-					pathVal := map[string]interface{}{"path": val}
-					param["value"] = pathVal
-					param["defaultValue"] = pathVal
-				} else {
-					param["value"] = val
-					param["defaultValue"] = val
-				}
-				params[j] = param
+			pm := rawParams[j].(map[string]interface{})
+			if isInputType(param.Type) {
+				pathVal := map[string]interface{}{"path": val}
+				pm["value"] = pathVal
+				pm["defaultValue"] = pathVal
+			} else {
+				pm["value"] = val
+				pm["defaultValue"] = val
 			}
+			rawParams[j] = pm
 		}
-		group["parameters"] = params
-		groups[i] = group
+		gm["parameters"] = rawParams
+		rawGroups[i] = gm
 	}
 
-	app["groups"] = groups
+	app["groups"] = rawGroups
 	return app
 }
 
