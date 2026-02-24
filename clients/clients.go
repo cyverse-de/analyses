@@ -23,13 +23,17 @@ func stripDomain(username string) string {
 }
 
 // buildURL constructs a full URL from a base URL, path components, a username,
-// and optional query parameters.
+// and optional query parameters. Each path component is URL-encoded.
 func buildURL(baseURL string, components []string, username string, query map[string]string) (string, error) {
 	u, err := url.Parse(baseURL)
 	if err != nil {
 		return "", fmt.Errorf("invalid base URL %q: %w", baseURL, err)
 	}
-	u.Path = strings.Join(append([]string{u.Path}, components...), "/")
+	escaped := make([]string, len(components))
+	for i, c := range components {
+		escaped[i] = url.PathEscape(c)
+	}
+	u = u.JoinPath(escaped...)
 	q := u.Query()
 	q.Set("user", stripDomain(username))
 	for k, v := range query {
@@ -46,7 +50,7 @@ type AppsClient struct {
 
 // NewAppsClient creates a new AppsClient.
 func NewAppsClient(baseURL string) *AppsClient {
-	return &AppsClient{BaseURL: strings.TrimRight(baseURL, "/")}
+	return &AppsClient{BaseURL: baseURL}
 }
 
 func (c *AppsClient) buildURL(components []string, username string, query map[string]string) (string, error) {
@@ -78,7 +82,7 @@ type DataInfoClient struct {
 
 // NewDataInfoClient creates a new DataInfoClient.
 func NewDataInfoClient(baseURL string) *DataInfoClient {
-	return &DataInfoClient{BaseURL: strings.TrimRight(baseURL, "/")}
+	return &DataInfoClient{BaseURL: baseURL}
 }
 
 func (c *DataInfoClient) buildURL(components []string, username string, query map[string]string) (string, error) {
@@ -86,6 +90,9 @@ func (c *DataInfoClient) buildURL(components []string, username string, query ma
 }
 
 // PathsAccessibleBy checks if paths are accessible by the given user.
+// The path-info endpoint returns 200 even for inaccessible paths, omitting
+// them from the response body. We verify that every requested path appears
+// in the response's "paths" map.
 func (c *DataInfoClient) PathsAccessibleBy(paths []string, user string) (bool, error) {
 	if len(paths) == 0 {
 		return true, nil
@@ -107,10 +114,39 @@ func (c *DataInfoClient) PathsAccessibleBy(paths []string, user string) (bool, e
 	}
 	defer resp.Body.Close() //nolint:errcheck
 
+	// The Clojure version treats a 500 with ERR_NOT_READABLE or
+	// ERR_DOES_NOT_EXIST as "not accessible". We simplify by treating any
+	// 500 the same way, since the body check on 200 is the primary mechanism.
 	if resp.StatusCode == http.StatusInternalServerError {
 		return false, nil
 	}
-	return resp.StatusCode == http.StatusOK, nil
+	// Any other non-200 status is unexpected and likely a bug, so propagate
+	// it as an error rather than silently treating it as inaccessible.
+	if resp.StatusCode != http.StatusOK {
+		respBody, err := io.ReadAll(resp.Body)
+		if err != nil {
+			return false, fmt.Errorf("unexpected status %d from path-info and failed to read body: %w", resp.StatusCode, err)
+		}
+		return false, fmt.Errorf("unexpected status %d from path-info: %s", resp.StatusCode, string(respBody))
+	}
+
+	var result struct {
+		Paths map[string]any `json:"paths"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return false, fmt.Errorf("failed to decode path-info response: %w", err)
+	}
+
+	// The path-info endpoint returns 200 even when some paths are not
+	// accessible to the user — those paths are simply omitted from the
+	// response's "paths" map. We must verify that every requested path
+	// is present in the response to confirm the user can access all of them.
+	for _, p := range paths {
+		if _, ok := result.Paths[p]; !ok {
+			return false, nil
+		}
+	}
+	return true, nil
 }
 
 const publicUser = "public"
@@ -275,7 +311,10 @@ func doJSONGet(reqURL string) (map[string]any, error) {
 	defer resp.Body.Close() //nolint:errcheck
 
 	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
+		body, err := io.ReadAll(resp.Body)
+		if err != nil {
+			return nil, fmt.Errorf("unexpected status %d and failed to read body: %w", resp.StatusCode, err)
+		}
 		return nil, fmt.Errorf("unexpected status %d: %s", resp.StatusCode, string(body))
 	}
 
