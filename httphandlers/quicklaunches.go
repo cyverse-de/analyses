@@ -11,13 +11,13 @@ import (
 
 // Handlers holds dependencies for HTTP handlers.
 type Handlers struct {
-	DB             *db.Database
-	AppsClient     *clients.AppsClient
-	DataInfoClient *clients.DataInfoClient
+	DB             DatabaseStore
+	AppsClient     AppFetcher
+	DataInfoClient PathChecker
 }
 
 // NewHandlers creates a new Handlers instance.
-func NewHandlers(database *db.Database, appsClient *clients.AppsClient, dataInfoClient *clients.DataInfoClient) *Handlers {
+func NewHandlers(database DatabaseStore, appsClient AppFetcher, dataInfoClient PathChecker) *Handlers {
 	return &Handlers{
 		DB:             database,
 		AppsClient:     appsClient,
@@ -90,7 +90,7 @@ func (h *Handlers) AddQuickLaunchHandler(c echo.Context) error {
 		IsPublic: nql.IsPublic,
 		User:     user,
 	}
-	if err := clients.ValidateSubmission(h.AppsClient, h.DataInfoClient, valReq); err != nil {
+	if err := clients.ValidateSubmission(h.DataInfoClient, valReq); err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
 	}
 
@@ -251,7 +251,7 @@ func (h *Handlers) UpdateQuickLaunchHandler(c echo.Context) error {
 		IsPublic: isPublic,
 		User:     user,
 	}
-	if err := clients.ValidateSubmission(h.AppsClient, h.DataInfoClient, valReq); err != nil {
+	if err := clients.ValidateSubmission(h.DataInfoClient, valReq); err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
 	}
 

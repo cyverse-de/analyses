@@ -149,6 +149,11 @@ func (c *DataInfoClient) PathsAccessibleBy(paths []string, user string) (bool, e
 	return true, nil
 }
 
+// PathChecker verifies path accessibility for a user.
+type PathChecker interface {
+	PathsAccessibleBy(paths []string, user string) (bool, error)
+}
+
 const publicUser = "public"
 
 // AppParam represents a single parameter within an app parameter group.
@@ -199,7 +204,7 @@ func extractAppGroups(app map[string]any) []AppGroup {
 }
 
 // ValidateSubmission validates the submission config params against the app definition.
-func ValidateSubmission(appsClient *AppsClient, dataInfoClient *DataInfoClient, req *ValidationRequest) error {
+func ValidateSubmission(dataInfoClient PathChecker, req *ValidationRequest) error {
 	if req.App == nil || req.Config == nil {
 		return nil
 	}
