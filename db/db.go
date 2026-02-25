@@ -451,9 +451,11 @@ func (d *Database) DeleteQuickLaunch(tx Tx, id, user string) error {
 		"SELECT submission_id FROM quick_launches WHERE id = $1 AND creator = $2",
 		id, userID,
 	).Scan(&submissionID)
-	if err != nil {
-		// No matching row; nothing to delete.
+	if errors.Is(err, sql.ErrNoRows) {
+		// Nothing to delete; treat as success per the idempotent delete contract.
 		return nil
+	} else if err != nil {
+		return fmt.Errorf("failed to look up quick launch %s: %w", id, err)
 	}
 
 	_, err = tx.Exec(
