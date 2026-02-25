@@ -80,7 +80,10 @@ func main() {
 	log.Infof("Data-info service base URL: %s", dataInfoBaseURL)
 
 	log.Info("Registering routes and initializing handlers...")
-	app := NewAnalysesApp(dbconn, appsBaseURL, dataInfoBaseURL)
+	app, err := NewAnalysesApp(dbconn, appsBaseURL, dataInfoBaseURL)
+	if err != nil {
+		log.Fatalf("failed to initialize app: %s", err)
+	}
 
 	addr := fmt.Sprintf(":%s", strconv.Itoa(*listenPort))
 

@@ -1,6 +1,7 @@
 package clients
 
 import (
+	"net/url"
 	"testing"
 )
 
@@ -27,14 +28,22 @@ func TestStripDomain(t *testing.T) {
 	}
 }
 
+func mustParseURL(t *testing.T, rawURL string) *url.URL {
+	t.Helper()
+	u, err := url.Parse(rawURL)
+	if err != nil {
+		t.Fatalf("failed to parse URL %q: %v", rawURL, err)
+	}
+	return u
+}
+
 func TestBuildURL(t *testing.T) {
 	tests := []struct {
-		name       string
-		baseURL    string
-		components []string
-		username   string
-		query      map[string]string
-		wantErr    bool
+		name         string
+		baseURL      string
+		components   []string
+		username     string
+		query        map[string]string
 		wantContains string // substring the result should contain
 	}{
 		{
@@ -67,13 +76,6 @@ func TestBuildURL(t *testing.T) {
 			wantContains: "/apps/hello%20world",
 		},
 		{
-			name:       "invalid base URL",
-			baseURL:    "://bad",
-			components: []string{"apps"},
-			username:   "user",
-			wantErr:    true,
-		},
-		{
 			name:         "empty components",
 			baseURL:      "http://localhost:8080",
 			components:   []string{},
@@ -83,13 +85,8 @@ func TestBuildURL(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := buildURL(tt.baseURL, tt.components, tt.username, tt.query)
-			if (err != nil) != tt.wantErr {
-				t.Fatalf("buildURL() error = %v, wantErr %v", err, tt.wantErr)
-			}
-			if tt.wantErr {
-				return
-			}
+			base := mustParseURL(t, tt.baseURL)
+			got := buildURL(base, tt.components, tt.username, tt.query)
 			if tt.wantContains != "" {
 				if !contains(got, tt.wantContains) {
 					t.Errorf("buildURL() = %q, want it to contain %q", got, tt.wantContains)

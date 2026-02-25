@@ -1,23 +1,45 @@
 package db
 
 import (
+	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"maps"
-	"strings"
 
 	"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"
 )
 
+// NotFoundError indicates that a requested resource was not found.
+type NotFoundError struct {
+	Type string
+	ID   string
+}
+
+func (e *NotFoundError) Error() string {
+	return fmt.Sprintf("%s not found: %s", e.Type, e.ID)
+}
+
+// NewNotFoundError creates a new NotFoundError.
+func NewNotFoundError(typeName, id string) *NotFoundError {
+	return &NotFoundError{Type: typeName, ID: id}
+}
+
 // IsNotFound returns true if the error indicates a resource was not found.
 func IsNotFound(err error) bool {
-	if err == nil {
-		return false
-	}
-	msg := err.Error()
-	return strings.HasSuffix(msg, "not found") ||
-		strings.Contains(msg, "not found:")
+	var nfe *NotFoundError
+	return errors.As(err, &nfe)
+}
+
+// Tx is the interface for database operations within a transaction.
+type Tx interface {
+	Exec(query string, args ...any) (sql.Result, error)
+	QueryRow(query string, args ...any) *sql.Row
+	QueryRowx(query string, args ...any) *sqlx.Row
+	Select(dest any, query string, args ...any) error
+	Commit() error
+	Rollback() error
 }
 
 // Database provides access to the analyses database.
@@ -30,12 +52,20 @@ func New(db *sqlx.DB) *Database {
 	return &Database{db: db}
 }
 
+// BeginTx starts a new database transaction.
+func (d *Database) BeginTx() (Tx, error) {
+	return d.db.Beginx()
+}
+
 // GetUserID returns the user ID for the given username.
-func (d *Database) GetUserID(username string) (string, error) {
+func (d *Database) GetUserID(tx Tx, username string) (string, error) {
 	var id string
-	err := d.db.QueryRow("SELECT id FROM users WHERE username = $1", username).Scan(&id)
+	err := tx.QueryRow("SELECT id FROM users WHERE username = $1", username).Scan(&id)
 	if err != nil {
-		return "", fmt.Errorf("user not found: %s", username)
+		if errors.Is(err, sql.ErrNoRows) {
+			return "", NewNotFoundError("user", username)
+		}
+		return "", fmt.Errorf("failed to look up user %s: %w", username, err)
 	}
 	return id, nil
 }
@@ -47,9 +77,9 @@ type Submission struct {
 }
 
 // AddSubmission adds a new submission and returns its UUID.
-func (d *Database) AddSubmission(submission json.RawMessage) (string, error) {
+func (d *Database) AddSubmission(tx Tx, submission json.RawMessage) (string, error) {
 	id := uuid.New().String()
-	_, err := d.db.Exec(
+	_, err := tx.Exec(
 		"INSERT INTO submissions (id, submission) VALUES ($1, CAST($2 AS JSON))",
 		id, string(submission),
 	)
@@ -60,32 +90,35 @@ func (d *Database) AddSubmission(submission json.RawMessage) (string, error) {
 }
 
 // GetSubmission returns a submission by ID.
-func (d *Database) GetSubmission(id string) (*Submission, error) {
+func (d *Database) GetSubmission(tx Tx, id string) (*Submission, error) {
 	var sub Submission
-	err := d.db.QueryRowx(
+	err := tx.QueryRowx(
 		"SELECT id, submission FROM submissions WHERE id = $1", id,
 	).StructScan(&sub)
 	if err != nil {
-		return nil, err
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, NewNotFoundError("submission", id)
+		}
+		return nil, fmt.Errorf("failed to get submission %s: %w", id, err)
 	}
 	return &sub, nil
 }
 
 // UpdateSubmission updates a submission and returns the updated record.
-func (d *Database) UpdateSubmission(id string, submission json.RawMessage) (*Submission, error) {
-	_, err := d.db.Exec(
+func (d *Database) UpdateSubmission(tx Tx, id string, submission json.RawMessage) (*Submission, error) {
+	_, err := tx.Exec(
 		"UPDATE submissions SET submission = CAST($1 AS JSON) WHERE id = $2",
 		string(submission), id,
 	)
 	if err != nil {
 		return nil, err
 	}
-	return d.GetSubmission(id)
+	return d.GetSubmission(tx, id)
 }
 
 // DeleteSubmission deletes a submission by ID.
-func (d *Database) DeleteSubmission(id string) error {
-	result, err := d.db.Exec("DELETE FROM submissions WHERE id = $1", id)
+func (d *Database) DeleteSubmission(tx Tx, id string) error {
+	result, err := tx.Exec("DELETE FROM submissions WHERE id = $1", id)
 	if err != nil {
 		return err
 	}
@@ -94,7 +127,7 @@ func (d *Database) DeleteSubmission(id string) error {
 		return err
 	}
 	if rows == 0 {
-		return fmt.Errorf("submission not found: %s", id)
+		return NewNotFoundError("submission", id)
 	}
 	return nil
 }
@@ -146,34 +179,37 @@ const quickLaunchSelectSQL = `
 	  JOIN submissions s ON ql.submission_id = s.id`
 
 // GetQuickLaunch returns a quick launch by ID, scoped to the user.
-func (d *Database) GetQuickLaunch(id, user string) (*QuickLaunch, error) {
-	userID, err := d.GetUserID(user)
+func (d *Database) GetQuickLaunch(tx Tx, id, user string) (*QuickLaunch, error) {
+	userID, err := d.GetUserID(tx, user)
 	if err != nil {
 		return nil, err
 	}
 
 	var ql QuickLaunch
-	err = d.db.QueryRowx(
+	err = tx.QueryRowx(
 		quickLaunchSelectSQL+`
 		 WHERE ql.id = $1
 		   AND (ql.creator = $2 OR ql.is_public = true)`,
 		id, userID,
 	).StructScan(&ql)
 	if err != nil {
-		return nil, fmt.Errorf("quick launch not found: %s", id)
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, NewNotFoundError("quick launch", id)
+		}
+		return nil, fmt.Errorf("failed to get quick launch %s: %w", id, err)
 	}
 	return &ql, nil
 }
 
 // GetAllQuickLaunches returns all quick launches accessible to the user.
-func (d *Database) GetAllQuickLaunches(user string) ([]QuickLaunch, error) {
-	userID, err := d.GetUserID(user)
+func (d *Database) GetAllQuickLaunches(tx Tx, user string) ([]QuickLaunch, error) {
+	userID, err := d.GetUserID(tx, user)
 	if err != nil {
 		return nil, err
 	}
 
 	var qls []QuickLaunch
-	err = d.db.Select(&qls,
+	err = tx.Select(&qls,
 		quickLaunchSelectSQL+`
 		 WHERE ql.creator = $1 OR ql.is_public = true`,
 		userID,
@@ -188,14 +224,14 @@ func (d *Database) GetAllQuickLaunches(user string) ([]QuickLaunch, error) {
 }
 
 // GetQuickLaunchesByApp returns quick launches for an app, scoped to the user.
-func (d *Database) GetQuickLaunchesByApp(appID, user string) ([]QuickLaunch, error) {
-	userID, err := d.GetUserID(user)
+func (d *Database) GetQuickLaunchesByApp(tx Tx, appID, user string) ([]QuickLaunch, error) {
+	userID, err := d.GetUserID(tx, user)
 	if err != nil {
 		return nil, err
 	}
 
 	var qls []QuickLaunch
-	err = d.db.Select(&qls,
+	err = tx.Select(&qls,
 		quickLaunchSelectSQL+`
 		 WHERE (ql.creator = $1 OR ql.is_public = true)
 		   AND ql.app_id = $2`,
@@ -211,19 +247,19 @@ func (d *Database) GetQuickLaunchesByApp(appID, user string) ([]QuickLaunch, err
 }
 
 // AddQuickLaunch adds a new quick launch.
-func (d *Database) AddQuickLaunch(user string, nql *NewQuickLaunch) (*QuickLaunch, error) {
-	userID, err := d.GetUserID(user)
+func (d *Database) AddQuickLaunch(tx Tx, user string, nql *NewQuickLaunch) (*QuickLaunch, error) {
+	userID, err := d.GetUserID(tx, user)
 	if err != nil {
 		return nil, err
 	}
 
-	submissionID, err := d.AddSubmission(nql.Submission)
+	submissionID, err := d.AddSubmission(tx, nql.Submission)
 	if err != nil {
 		return nil, err
 	}
 
 	id := uuid.New().String()
-	_, err = d.db.Exec(
+	_, err = tx.Exec(
 		`INSERT INTO quick_launches (id, name, description, app_id, app_version_id, is_public, submission_id, creator)
 		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
 		id, nql.Name, nql.Description, nql.AppID, nql.AppVersionID, nql.IsPublic, submissionID, userID,
@@ -232,7 +268,7 @@ func (d *Database) AddQuickLaunch(user string, nql *NewQuickLaunch) (*QuickLaunc
 		return nil, err
 	}
 
-	return d.GetQuickLaunch(id, user)
+	return d.GetQuickLaunch(tx, id, user)
 }
 
 // UnjoinedQuickLaunch is a raw quick_launches row without joins.
@@ -248,32 +284,35 @@ type UnjoinedQuickLaunch struct {
 }
 
 // GetUnjoinedQuickLaunch returns a raw quick launch row owned by user.
-func (d *Database) GetUnjoinedQuickLaunch(id, user string) (*UnjoinedQuickLaunch, error) {
-	userID, err := d.GetUserID(user)
+func (d *Database) GetUnjoinedQuickLaunch(tx Tx, id, user string) (*UnjoinedQuickLaunch, error) {
+	userID, err := d.GetUserID(tx, user)
 	if err != nil {
 		return nil, err
 	}
 
 	var uql UnjoinedQuickLaunch
-	err = d.db.QueryRowx(
+	err = tx.QueryRowx(
 		`SELECT id, name, description, app_id, app_version_id, is_public, submission_id, creator
 		   FROM quick_launches WHERE id = $1 AND creator = $2`,
 		id, userID,
 	).StructScan(&uql)
 	if err != nil {
-		return nil, err
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, NewNotFoundError("quick launch", id)
+		}
+		return nil, fmt.Errorf("failed to get quick launch %s: %w", id, err)
 	}
 	return &uql, nil
 }
 
 // MergeSubmission merges new submission data into the existing one.
-func (d *Database) MergeSubmission(qlID, user string, newSubmission json.RawMessage) (json.RawMessage, error) {
-	uql, err := d.GetUnjoinedQuickLaunch(qlID, user)
+func (d *Database) MergeSubmission(tx Tx, qlID, user string, newSubmission json.RawMessage) (json.RawMessage, error) {
+	uql, err := d.GetUnjoinedQuickLaunch(tx, qlID, user)
 	if err != nil {
 		return nil, err
 	}
 
-	oldSub, err := d.GetSubmission(uql.SubmissionID)
+	oldSub, err := d.GetSubmission(tx, uql.SubmissionID)
 	if err != nil {
 		return nil, err
 	}
@@ -298,42 +337,45 @@ func (d *Database) MergeSubmission(qlID, user string, newSubmission json.RawMess
 }
 
 // UpdateQuickLaunch updates an existing quick launch.
-func (d *Database) UpdateQuickLaunch(id, user string, uql *UpdateQuickLaunchRequest) (*QuickLaunch, error) {
-	userID, err := d.GetUserID(user)
+func (d *Database) UpdateQuickLaunch(tx Tx, id, user string, uql *UpdateQuickLaunchRequest) (*QuickLaunch, error) {
+	userID, err := d.GetUserID(tx, user)
 	if err != nil {
 		return nil, err
 	}
 
 	// Verify the quick launch exists and is owned by user
 	var exists bool
-	err = d.db.QueryRow(
+	err = tx.QueryRow(
 		"SELECT EXISTS(SELECT 1 FROM quick_launches WHERE id = $1 AND creator = $2)",
 		id, userID,
 	).Scan(&exists)
-	if err != nil || !exists {
-		return nil, fmt.Errorf("quick launch not found: %s", id)
+	if err != nil {
+		return nil, fmt.Errorf("failed to check quick launch existence: %w", err)
+	}
+	if !exists {
+		return nil, NewNotFoundError("quick launch", id)
 	}
 
 	// Handle submission merging
 	var newSubmissionID string
 	var oldSubmissionID string
 	if uql.Submission != nil {
-		unjoined, uerr := d.GetUnjoinedQuickLaunch(id, user)
+		unjoined, uerr := d.GetUnjoinedQuickLaunch(tx, id, user)
 		if uerr != nil {
 			return nil, uerr
 		}
 		oldSubmissionID = unjoined.SubmissionID
 
-		merged, merr := d.MergeSubmission(id, user, *uql.Submission)
+		merged, merr := d.MergeSubmission(tx, id, user, *uql.Submission)
 		if merr != nil {
 			return nil, merr
 		}
-		newSubmissionID, err = d.AddSubmission(merged)
+		newSubmissionID, err = d.AddSubmission(tx, merged)
 		if err != nil {
 			return nil, err
 		}
 	} else {
-		unjoined, uerr := d.GetUnjoinedQuickLaunch(id, user)
+		unjoined, uerr := d.GetUnjoinedQuickLaunch(tx, id, user)
 		if uerr != nil {
 			return nil, uerr
 		}
@@ -343,7 +385,7 @@ func (d *Database) UpdateQuickLaunch(id, user string, uql *UpdateQuickLaunchRequ
 	// Resolve the target creator
 	targetCreator := userID
 	if uql.Creator != nil {
-		targetCreator, err = d.GetUserID(*uql.Creator)
+		targetCreator, err = d.GetUserID(tx, *uql.Creator)
 		if err != nil {
 			return nil, err
 		}
@@ -383,29 +425,29 @@ func (d *Database) UpdateQuickLaunch(id, user string, uql *UpdateQuickLaunchRequ
 	query += fmt.Sprintf(" WHERE id = $%d AND creator = $%d", argIdx, argIdx+1)
 	args = append(args, id, userID)
 
-	_, err = d.db.Exec(query, args...)
+	_, err = tx.Exec(query, args...)
 	if err != nil {
 		return nil, err
 	}
 
 	// Clean up the old submission row if it was replaced.
 	if oldSubmissionID != "" && oldSubmissionID != newSubmissionID {
-		d.DeleteSubmission(oldSubmissionID) //nolint:errcheck
+		d.DeleteSubmission(tx, oldSubmissionID) //nolint:errcheck
 	}
 
-	return d.GetQuickLaunch(id, user)
+	return d.GetQuickLaunch(tx, id, user)
 }
 
 // DeleteQuickLaunch deletes a quick launch and its associated submission by ID.
-func (d *Database) DeleteQuickLaunch(id, user string) error {
-	userID, err := d.GetUserID(user)
+func (d *Database) DeleteQuickLaunch(tx Tx, id, user string) error {
+	userID, err := d.GetUserID(tx, user)
 	if err != nil {
 		return err
 	}
 
 	// Look up the submission_id before deleting so we can clean it up.
 	var submissionID string
-	err = d.db.QueryRow(
+	err = tx.QueryRow(
 		"SELECT submission_id FROM quick_launches WHERE id = $1 AND creator = $2",
 		id, userID,
 	).Scan(&submissionID)
@@ -414,7 +456,7 @@ func (d *Database) DeleteQuickLaunch(id, user string) error {
 		return nil
 	}
 
-	_, err = d.db.Exec(
+	_, err = tx.Exec(
 		"DELETE FROM quick_launches WHERE id = $1 AND creator = $2",
 		id, userID,
 	)
@@ -423,7 +465,7 @@ func (d *Database) DeleteQuickLaunch(id, user string) error {
 	}
 
 	// Clean up the orphaned submission row.
-	return d.DeleteSubmission(submissionID)
+	return d.DeleteSubmission(tx, submissionID)
 }
 
 // QuickLaunchFavorite represents a favorited quick launch.
@@ -434,14 +476,14 @@ type QuickLaunchFavorite struct {
 }
 
 // GetAllFavorites returns all quick launch favorites for a user.
-func (d *Database) GetAllFavorites(user string) ([]QuickLaunchFavorite, error) {
-	userID, err := d.GetUserID(user)
+func (d *Database) GetAllFavorites(tx Tx, user string) ([]QuickLaunchFavorite, error) {
+	userID, err := d.GetUserID(tx, user)
 	if err != nil {
 		return nil, err
 	}
 
 	var favs []QuickLaunchFavorite
-	err = d.db.Select(&favs,
+	err = tx.Select(&favs,
 		`SELECT qlf.id,
 		        qlf.quick_launch_id,
 		        u.username AS "user"
@@ -461,14 +503,14 @@ func (d *Database) GetAllFavorites(user string) ([]QuickLaunchFavorite, error) {
 }
 
 // GetFavorite returns a single quick launch favorite.
-func (d *Database) GetFavorite(user, favID string) (*QuickLaunchFavorite, error) {
-	userID, err := d.GetUserID(user)
+func (d *Database) GetFavorite(tx Tx, user, favID string) (*QuickLaunchFavorite, error) {
+	userID, err := d.GetUserID(tx, user)
 	if err != nil {
 		return nil, err
 	}
 
 	var fav QuickLaunchFavorite
-	err = d.db.QueryRowx(
+	err = tx.QueryRowx(
 		`SELECT qlf.id,
 		        qlf.quick_launch_id,
 		        u.username AS "user"
@@ -480,20 +522,23 @@ func (d *Database) GetFavorite(user, favID string) (*QuickLaunchFavorite, error)
 		userID, favID,
 	).StructScan(&fav)
 	if err != nil {
-		return nil, fmt.Errorf("favorite not found: %s", favID)
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, NewNotFoundError("favorite", favID)
+		}
+		return nil, fmt.Errorf("failed to get favorite %s: %w", favID, err)
 	}
 	return &fav, nil
 }
 
 // AddFavorite adds a quick launch favorite.
-func (d *Database) AddFavorite(user, quickLaunchID string) (*QuickLaunchFavorite, error) {
-	userID, err := d.GetUserID(user)
+func (d *Database) AddFavorite(tx Tx, user, quickLaunchID string) (*QuickLaunchFavorite, error) {
+	userID, err := d.GetUserID(tx, user)
 	if err != nil {
 		return nil, err
 	}
 
 	id := uuid.New().String()
-	_, err = d.db.Exec(
+	_, err = tx.Exec(
 		"INSERT INTO quick_launch_favorites (id, quick_launch_id, user_id) VALUES ($1, $2, $3)",
 		id, quickLaunchID, userID,
 	)
@@ -501,17 +546,17 @@ func (d *Database) AddFavorite(user, quickLaunchID string) (*QuickLaunchFavorite
 		return nil, err
 	}
 
-	return d.GetFavorite(user, id)
+	return d.GetFavorite(tx, user, id)
 }
 
 // DeleteFavorite deletes a quick launch favorite.
-func (d *Database) DeleteFavorite(user, favID string) error {
-	userID, err := d.GetUserID(user)
+func (d *Database) DeleteFavorite(tx Tx, user, favID string) error {
+	userID, err := d.GetUserID(tx, user)
 	if err != nil {
 		return err
 	}
 
-	result, err := d.db.Exec(
+	result, err := tx.Exec(
 		"DELETE FROM quick_launch_favorites WHERE id = $1 AND user_id = $2",
 		favID, userID,
 	)
@@ -523,7 +568,7 @@ func (d *Database) DeleteFavorite(user, favID string) error {
 		return err
 	}
 	if rows == 0 {
-		return fmt.Errorf("favorite not found: %s", favID)
+		return NewNotFoundError("favorite", favID)
 	}
 	return nil
 }
@@ -544,19 +589,19 @@ type NewQuickLaunchUserDefault struct {
 
 // UpdateQuickLaunchUserDefaultRequest represents an update to a user default.
 type UpdateQuickLaunchUserDefaultRequest struct {
-	QuickLaunchID *string `json:"quick_launch_id,omitempty"`
-	AppID         *string `json:"app_id,omitempty"`
+	QuickLaunchID string `json:"quick_launch_id"`
+	AppID         string `json:"app_id"`
 }
 
 // GetUserDefault returns a quick launch user default.
-func (d *Database) GetUserDefault(user, id string) (*QuickLaunchUserDefault, error) {
-	userID, err := d.GetUserID(user)
+func (d *Database) GetUserDefault(tx Tx, user, id string) (*QuickLaunchUserDefault, error) {
+	userID, err := d.GetUserID(tx, user)
 	if err != nil {
 		return nil, err
 	}
 
 	var ud QuickLaunchUserDefault
-	err = d.db.QueryRowx(
+	err = tx.QueryRowx(
 		`SELECT qlud.id,
 		        u.username AS "user",
 		        qlud.quick_launch_id,
@@ -568,20 +613,23 @@ func (d *Database) GetUserDefault(user, id string) (*QuickLaunchUserDefault, err
 		userID, id,
 	).StructScan(&ud)
 	if err != nil {
-		return nil, fmt.Errorf("user default not found: %s", id)
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, NewNotFoundError("user default", id)
+		}
+		return nil, fmt.Errorf("failed to get user default %s: %w", id, err)
 	}
 	return &ud, nil
 }
 
 // GetAllUserDefaults returns all quick launch user defaults for a user.
-func (d *Database) GetAllUserDefaults(user string) ([]QuickLaunchUserDefault, error) {
-	userID, err := d.GetUserID(user)
+func (d *Database) GetAllUserDefaults(tx Tx, user string) ([]QuickLaunchUserDefault, error) {
+	userID, err := d.GetUserID(tx, user)
 	if err != nil {
 		return nil, err
 	}
 
 	var uds []QuickLaunchUserDefault
-	err = d.db.Select(&uds,
+	err = tx.Select(&uds,
 		`SELECT qlud.id,
 		        u.username AS "user",
 		        qlud.quick_launch_id,
@@ -601,14 +649,14 @@ func (d *Database) GetAllUserDefaults(user string) ([]QuickLaunchUserDefault, er
 }
 
 // AddUserDefault adds a quick launch user default.
-func (d *Database) AddUserDefault(user string, nud *NewQuickLaunchUserDefault) (*QuickLaunchUserDefault, error) {
-	userID, err := d.GetUserID(user)
+func (d *Database) AddUserDefault(tx Tx, user string, nud *NewQuickLaunchUserDefault) (*QuickLaunchUserDefault, error) {
+	userID, err := d.GetUserID(tx, user)
 	if err != nil {
 		return nil, err
 	}
 
 	id := uuid.New().String()
-	_, err = d.db.Exec(
+	_, err = tx.Exec(
 		`INSERT INTO quick_launch_user_defaults (id, user_id, quick_launch_id, app_id)
 		 VALUES ($1, $2, $3, $4)`,
 		id, userID, nud.QuickLaunchID, nud.AppID,
@@ -617,57 +665,44 @@ func (d *Database) AddUserDefault(user string, nud *NewQuickLaunchUserDefault) (
 		return nil, err
 	}
 
-	return d.GetUserDefault(user, id)
+	return d.GetUserDefault(tx, user, id)
 }
 
 // UpdateUserDefault updates a quick launch user default.
-func (d *Database) UpdateUserDefault(id, user string, update *UpdateQuickLaunchUserDefaultRequest) (*QuickLaunchUserDefault, error) {
-	userID, err := d.GetUserID(user)
+func (d *Database) UpdateUserDefault(tx Tx, id, user string, update *UpdateQuickLaunchUserDefaultRequest) (*QuickLaunchUserDefault, error) {
+	userID, err := d.GetUserID(tx, user)
 	if err != nil {
 		return nil, err
 	}
 
-	// Verify it exists and is owned by user
-	var exists bool
-	err = d.db.QueryRow(
-		"SELECT EXISTS(SELECT 1 FROM quick_launch_user_defaults WHERE id = $1 AND user_id = $2)",
-		id, userID,
-	).Scan(&exists)
-	if err != nil || !exists {
-		return nil, fmt.Errorf("user default not found: %s", id)
+	result, err := tx.Exec(
+		`UPDATE quick_launch_user_defaults
+		    SET app_id = $1, quick_launch_id = $2
+		  WHERE id = $3 AND user_id = $4`,
+		update.AppID, update.QuickLaunchID, id, userID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := result.RowsAffected()
+	if err != nil {
+		return nil, err
+	}
+	if rows == 0 {
+		return nil, NewNotFoundError("user default", id)
 	}
 
-	if update.AppID != nil {
-		_, err = d.db.Exec(
-			"UPDATE quick_launch_user_defaults SET app_id = $1 WHERE id = $2 AND user_id = $3",
-			*update.AppID, id, userID,
-		)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	if update.QuickLaunchID != nil {
-		_, err = d.db.Exec(
-			"UPDATE quick_launch_user_defaults SET quick_launch_id = $1 WHERE id = $2 AND user_id = $3",
-			*update.QuickLaunchID, id, userID,
-		)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	return d.GetUserDefault(user, id)
+	return d.GetUserDefault(tx, user, id)
 }
 
 // DeleteUserDefault deletes a quick launch user default.
-func (d *Database) DeleteUserDefault(user, id string) error {
-	userID, err := d.GetUserID(user)
+func (d *Database) DeleteUserDefault(tx Tx, user, id string) error {
+	userID, err := d.GetUserID(tx, user)
 	if err != nil {
 		return err
 	}
 
-	result, err := d.db.Exec(
+	result, err := tx.Exec(
 		"DELETE FROM quick_launch_user_defaults WHERE id = $1 AND user_id = $2",
 		id, userID,
 	)
@@ -679,7 +714,7 @@ func (d *Database) DeleteUserDefault(user, id string) error {
 		return err
 	}
 	if rows == 0 {
-		return fmt.Errorf("user default not found: %s", id)
+		return NewNotFoundError("user default", id)
 	}
 	return nil
 }
@@ -699,19 +734,19 @@ type NewQuickLaunchGlobalDefault struct {
 
 // UpdateQuickLaunchGlobalDefaultRequest represents an update to a global default.
 type UpdateQuickLaunchGlobalDefaultRequest struct {
-	AppID         *string `json:"app_id,omitempty"`
-	QuickLaunchID *string `json:"quick_launch_id,omitempty"`
+	AppID         string `json:"app_id"`
+	QuickLaunchID string `json:"quick_launch_id"`
 }
 
 // GetGlobalDefault returns a quick launch global default.
-func (d *Database) GetGlobalDefault(user, id string) (*QuickLaunchGlobalDefault, error) {
-	userID, err := d.GetUserID(user)
+func (d *Database) GetGlobalDefault(tx Tx, user, id string) (*QuickLaunchGlobalDefault, error) {
+	userID, err := d.GetUserID(tx, user)
 	if err != nil {
 		return nil, err
 	}
 
 	var gd QuickLaunchGlobalDefault
-	err = d.db.QueryRowx(
+	err = tx.QueryRowx(
 		`SELECT gd.id, gd.app_id, gd.quick_launch_id
 		   FROM quick_launch_global_defaults gd
 		   JOIN quick_launches ql ON gd.quick_launch_id = ql.id
@@ -720,20 +755,23 @@ func (d *Database) GetGlobalDefault(user, id string) (*QuickLaunchGlobalDefault,
 		id, userID,
 	).StructScan(&gd)
 	if err != nil {
-		return nil, fmt.Errorf("global default not found: %s", id)
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, NewNotFoundError("global default", id)
+		}
+		return nil, fmt.Errorf("failed to get global default %s: %w", id, err)
 	}
 	return &gd, nil
 }
 
 // GetAllGlobalDefaults returns all quick launch global defaults for a user.
-func (d *Database) GetAllGlobalDefaults(user string) ([]QuickLaunchGlobalDefault, error) {
-	userID, err := d.GetUserID(user)
+func (d *Database) GetAllGlobalDefaults(tx Tx, user string) ([]QuickLaunchGlobalDefault, error) {
+	userID, err := d.GetUserID(tx, user)
 	if err != nil {
 		return nil, err
 	}
 
 	var gds []QuickLaunchGlobalDefault
-	err = d.db.Select(&gds,
+	err = tx.Select(&gds,
 		`SELECT gd.id, gd.app_id, gd.quick_launch_id
 		   FROM quick_launch_global_defaults gd
 		   JOIN quick_launches ql ON gd.quick_launch_id = ql.id
@@ -750,9 +788,9 @@ func (d *Database) GetAllGlobalDefaults(user string) ([]QuickLaunchGlobalDefault
 }
 
 // AddGlobalDefault adds a quick launch global default.
-func (d *Database) AddGlobalDefault(user string, ngd *NewQuickLaunchGlobalDefault) (*QuickLaunchGlobalDefault, error) {
+func (d *Database) AddGlobalDefault(tx Tx, user string, ngd *NewQuickLaunchGlobalDefault) (*QuickLaunchGlobalDefault, error) {
 	id := uuid.New().String()
-	_, err := d.db.Exec(
+	_, err := tx.Exec(
 		`INSERT INTO quick_launch_global_defaults (id, app_id, quick_launch_id)
 		 VALUES ($1, $2, $3)`,
 		id, ngd.AppID, ngd.QuickLaunchID,
@@ -761,51 +799,49 @@ func (d *Database) AddGlobalDefault(user string, ngd *NewQuickLaunchGlobalDefaul
 		return nil, err
 	}
 
-	return d.GetGlobalDefault(user, id)
+	return d.GetGlobalDefault(tx, user, id)
 }
 
 // UpdateGlobalDefault updates a quick launch global default.
-func (d *Database) UpdateGlobalDefault(id, user string, update *UpdateQuickLaunchGlobalDefaultRequest) (*QuickLaunchGlobalDefault, error) {
-	userID, err := d.GetUserID(user)
+func (d *Database) UpdateGlobalDefault(tx Tx, id, user string, update *UpdateQuickLaunchGlobalDefaultRequest) (*QuickLaunchGlobalDefault, error) {
+	userID, err := d.GetUserID(tx, user)
 	if err != nil {
 		return nil, err
 	}
 
-	subquery := `SELECT ql.id FROM quick_launches ql
-	             JOIN quick_launch_global_defaults gd ON ql.id = gd.quick_launch_id
-	             WHERE ql.creator = $3`
-
-	if update.AppID != nil {
-		_, err = d.db.Exec(
-			fmt.Sprintf("UPDATE quick_launch_global_defaults SET app_id = $1 WHERE id = $2 AND quick_launch_id IN (%s)", subquery),
-			*update.AppID, id, userID,
-		)
-		if err != nil {
-			return nil, err
-		}
+	result, err := tx.Exec(
+		`UPDATE quick_launch_global_defaults
+		    SET app_id = $1, quick_launch_id = $2
+		  WHERE id = $3
+		    AND quick_launch_id IN (
+		        SELECT ql.id FROM quick_launches ql
+		        JOIN quick_launch_global_defaults gd ON ql.id = gd.quick_launch_id
+		        WHERE ql.creator = $4
+		    )`,
+		update.AppID, update.QuickLaunchID, id, userID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := result.RowsAffected()
+	if err != nil {
+		return nil, err
+	}
+	if rows == 0 {
+		return nil, NewNotFoundError("global default", id)
 	}
 
-	if update.QuickLaunchID != nil {
-		_, err = d.db.Exec(
-			fmt.Sprintf("UPDATE quick_launch_global_defaults SET quick_launch_id = $1 WHERE id = $2 AND quick_launch_id IN (%s)", subquery),
-			*update.QuickLaunchID, id, userID,
-		)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	return d.GetGlobalDefault(user, id)
+	return d.GetGlobalDefault(tx, user, id)
 }
 
 // DeleteGlobalDefault deletes a quick launch global default.
-func (d *Database) DeleteGlobalDefault(user, id string) error {
-	userID, err := d.GetUserID(user)
+func (d *Database) DeleteGlobalDefault(tx Tx, user, id string) error {
+	userID, err := d.GetUserID(tx, user)
 	if err != nil {
 		return err
 	}
 
-	result, err := d.db.Exec(
+	result, err := tx.Exec(
 		`DELETE FROM quick_launch_global_defaults
 		  WHERE id = $1
 		    AND quick_launch_id IN (
@@ -823,7 +859,7 @@ func (d *Database) DeleteGlobalDefault(user, id string) error {
 		return err
 	}
 	if rows == 0 {
-		return fmt.Errorf("global default not found: %s", id)
+		return NewNotFoundError("global default", id)
 	}
 	return nil
 }
@@ -845,16 +881,15 @@ type ConcurrentJobLimitUpdate struct {
 	ConcurrentJobs int `json:"concurrent_jobs"`
 }
 
+const jobLimitSelectSQL = `SELECT launcher AS username,
+	        concurrent_jobs,
+	        (launcher IS NULL) AS is_default
+	   FROM job_limits`
+
 // ListConcurrentJobLimits returns all defined concurrent job limits.
-func (d *Database) ListConcurrentJobLimits() ([]ConcurrentJobLimit, error) {
+func (d *Database) ListConcurrentJobLimits(tx Tx) ([]ConcurrentJobLimit, error) {
 	var limits []ConcurrentJobLimit
-	err := d.db.Select(&limits,
-		`SELECT launcher AS username,
-		        concurrent_jobs,
-		        (launcher IS NULL) AS is_default
-		   FROM job_limits
-		  ORDER BY launcher ASC`,
-	)
+	err := tx.Select(&limits, jobLimitSelectSQL+` ORDER BY launcher ASC`)
 	if err != nil {
 		return nil, err
 	}
@@ -866,13 +901,10 @@ func (d *Database) ListConcurrentJobLimits() ([]ConcurrentJobLimit, error) {
 
 // GetConcurrentJobLimit returns the concurrent job limit for a user.
 // Falls back to the default limit if no user-specific limit is found.
-func (d *Database) GetConcurrentJobLimit(username string) (*ConcurrentJobLimit, error) {
+func (d *Database) GetConcurrentJobLimit(tx Tx, username string) (*ConcurrentJobLimit, error) {
 	var limits []ConcurrentJobLimit
-	err := d.db.Select(&limits,
-		`SELECT launcher AS username,
-		        concurrent_jobs,
-		        (launcher IS NULL) AS is_default
-		   FROM job_limits
+	err := tx.Select(&limits,
+		jobLimitSelectSQL+`
 		  WHERE launcher = regexp_replace($1, '-', '_')
 		     OR launcher IS NULL
 		  ORDER BY is_default ASC`,
@@ -882,30 +914,24 @@ func (d *Database) GetConcurrentJobLimit(username string) (*ConcurrentJobLimit, 
 		return nil, err
 	}
 	if len(limits) == 0 {
-		return nil, fmt.Errorf("job limit not found: %s", username)
+		return nil, NewNotFoundError("job limit", username)
 	}
 	return &limits[0], nil
 }
 
 // SetConcurrentJobLimit sets the concurrent job limit for a user.
-func (d *Database) SetConcurrentJobLimit(username string, limit int) (*ConcurrentJobLimit, error) {
-	tx, err := d.db.Beginx()
-	if err != nil {
+func (d *Database) SetConcurrentJobLimit(tx Tx, username string, limit int) (*ConcurrentJobLimit, error) {
+	current, err := d.GetConcurrentJobLimit(tx, username)
+	if err != nil && !IsNotFound(err) {
 		return nil, err
 	}
-	defer tx.Rollback() //nolint:errcheck
-
-	// Check if the user already has a specific limit
-	current, _ := d.getConcurrentJobLimitTx(tx, username)
 
 	if current == nil || current.IsDefault {
-		// Insert new limit
 		_, err = tx.Exec(
 			"INSERT INTO job_limits (launcher, concurrent_jobs) VALUES (regexp_replace($1, '-', '_'), $2)",
 			username, limit,
 		)
 	} else {
-		// Update existing limit
 		_, err = tx.Exec(
 			"UPDATE job_limits SET concurrent_jobs = $1 WHERE launcher = regexp_replace($2, '-', '_')",
 			limit, username,
@@ -915,48 +941,12 @@ func (d *Database) SetConcurrentJobLimit(username string, limit int) (*Concurren
 		return nil, err
 	}
 
-	result, err := d.getConcurrentJobLimitTx(tx, username)
-	if err != nil {
-		return nil, err
-	}
-
-	if err = tx.Commit(); err != nil {
-		return nil, err
-	}
-
-	return result, nil
-}
-
-func (d *Database) getConcurrentJobLimitTx(tx *sqlx.Tx, username string) (*ConcurrentJobLimit, error) {
-	var limits []ConcurrentJobLimit
-	err := tx.Select(&limits,
-		`SELECT launcher AS username,
-		        concurrent_jobs,
-		        (launcher IS NULL) AS is_default
-		   FROM job_limits
-		  WHERE launcher = regexp_replace($1, '-', '_')
-		     OR launcher IS NULL
-		  ORDER BY is_default ASC`,
-		username,
-	)
-	if err != nil {
-		return nil, err
-	}
-	if len(limits) == 0 {
-		return nil, fmt.Errorf("job limit not found: %s", username)
-	}
-	return &limits[0], nil
+	return d.GetConcurrentJobLimit(tx, username)
 }
 
 // RemoveConcurrentJobLimit removes a user's concurrent job limit, returning the default.
-func (d *Database) RemoveConcurrentJobLimit(username string) (*ConcurrentJobLimit, error) {
-	tx, err := d.db.Beginx()
-	if err != nil {
-		return nil, err
-	}
-	defer tx.Rollback() //nolint:errcheck
-
-	_, err = tx.Exec(
+func (d *Database) RemoveConcurrentJobLimit(tx Tx, username string) (*ConcurrentJobLimit, error) {
+	_, err := tx.Exec(
 		"DELETE FROM job_limits WHERE launcher = regexp_replace($1, '-', '_')",
 		username,
 	)
@@ -964,17 +954,8 @@ func (d *Database) RemoveConcurrentJobLimit(username string) (*ConcurrentJobLimi
 		return nil, err
 	}
 
-	// Return the default limit
-	result, err := d.getConcurrentJobLimitTx(tx, "")
-	if err != nil {
-		return nil, err
-	}
-
-	if err = tx.Commit(); err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	// Return the default limit.
+	return d.GetConcurrentJobLimit(tx, "")
 }
 
 // DeletionResponse is the standard response for deletion operations.

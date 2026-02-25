@@ -17,8 +17,18 @@ import (
 //	@Failure		500	{object}	common.ErrorResponse
 //	@Router			/settings/concurrent-job-limits [get]
 func (h *Handlers) ListConcurrentJobLimitsHandler(c echo.Context) error {
-	limits, err := h.DB.ListConcurrentJobLimits()
+	tx, err := h.DB.BeginTx()
 	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+	}
+	defer tx.Rollback() //nolint:errcheck
+
+	limits, err := h.DB.ListConcurrentJobLimits(tx)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+	}
+
+	if err := tx.Commit(); err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 
@@ -38,9 +48,22 @@ func (h *Handlers) ListConcurrentJobLimitsHandler(c echo.Context) error {
 func (h *Handlers) GetConcurrentJobLimitHandler(c echo.Context) error {
 	username := c.Param("username")
 
-	limit, err := h.DB.GetConcurrentJobLimit(username)
+	tx, err := h.DB.BeginTx()
 	if err != nil {
-		return echo.NewHTTPError(http.StatusNotFound, err.Error())
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+	}
+	defer tx.Rollback() //nolint:errcheck
+
+	limit, err := h.DB.GetConcurrentJobLimit(tx, username)
+	if err != nil {
+		if db.IsNotFound(err) {
+			return echo.NewHTTPError(http.StatusNotFound, err.Error())
+		}
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+	}
+
+	if err := tx.Commit(); err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 
 	return c.JSON(http.StatusOK, limit)
@@ -67,8 +90,18 @@ func (h *Handlers) SetConcurrentJobLimitHandler(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
 	}
 
-	limit, err := h.DB.SetConcurrentJobLimit(username, update.ConcurrentJobs)
+	tx, err := h.DB.BeginTx()
 	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+	}
+	defer tx.Rollback() //nolint:errcheck
+
+	limit, err := h.DB.SetConcurrentJobLimit(tx, username, update.ConcurrentJobs)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+	}
+
+	if err := tx.Commit(); err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 
@@ -88,8 +121,18 @@ func (h *Handlers) SetConcurrentJobLimitHandler(c echo.Context) error {
 func (h *Handlers) RemoveConcurrentJobLimitHandler(c echo.Context) error {
 	username := c.Param("username")
 
-	limit, err := h.DB.RemoveConcurrentJobLimit(username)
+	tx, err := h.DB.BeginTx()
 	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+	}
+	defer tx.Rollback() //nolint:errcheck
+
+	limit, err := h.DB.RemoveConcurrentJobLimit(tx, username)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+	}
+
+	if err := tx.Commit(); err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 

@@ -2,6 +2,7 @@ package db
 
 import (
 	"errors"
+	"fmt"
 	"testing"
 )
 
@@ -12,11 +13,10 @@ func TestIsNotFound(t *testing.T) {
 		want bool
 	}{
 		{"nil error", nil, false},
-		{"suffix 'not found'", errors.New("quick launch not found"), true},
-		{"contains 'not found:'", errors.New("not found: some detail"), true},
+		{"NotFoundError pointer", NewNotFoundError("quick launch", "abc-123"), true},
+		{"wrapped NotFoundError", fmt.Errorf("wrapped: %w", NewNotFoundError("user", "bob")), true},
 		{"unrelated error", errors.New("connection refused"), false},
-		{"exact match", errors.New("not found"), true},
-		{"case sensitive - uppercase", errors.New("Not Found"), false},
+		{"plain string error", errors.New("not found"), false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -25,5 +25,13 @@ func TestIsNotFound(t *testing.T) {
 				t.Errorf("IsNotFound(%v) = %v, want %v", tt.err, got, tt.want)
 			}
 		})
+	}
+}
+
+func TestNotFoundError_Error(t *testing.T) {
+	err := NewNotFoundError("quick launch", "id-42")
+	msg := err.Error()
+	if msg != "quick launch not found: id-42" {
+		t.Errorf("Error() = %q, want %q", msg, "quick launch not found: id-42")
 	}
 }

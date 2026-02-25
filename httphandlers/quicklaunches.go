@@ -94,8 +94,18 @@ func (h *Handlers) AddQuickLaunchHandler(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
 	}
 
-	ql, err := h.DB.AddQuickLaunch(user, &nql)
+	tx, err := h.DB.BeginTx()
 	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+	}
+	defer tx.Rollback() //nolint:errcheck
+
+	ql, err := h.DB.AddQuickLaunch(tx, user, &nql)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+	}
+
+	if err := tx.Commit(); err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 
@@ -119,8 +129,18 @@ func (h *Handlers) GetAllQuickLaunchesHandler(c echo.Context) error {
 		return err
 	}
 
-	qls, err := h.DB.GetAllQuickLaunches(user)
+	tx, err := h.DB.BeginTx()
 	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+	}
+	defer tx.Rollback() //nolint:errcheck
+
+	qls, err := h.DB.GetAllQuickLaunches(tx, user)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+	}
+
+	if err := tx.Commit(); err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 
@@ -146,8 +166,18 @@ func (h *Handlers) GetQuickLaunchesByAppHandler(c echo.Context) error {
 		return err
 	}
 
-	qls, err := h.DB.GetQuickLaunchesByApp(appID, user)
+	tx, err := h.DB.BeginTx()
 	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+	}
+	defer tx.Rollback() //nolint:errcheck
+
+	qls, err := h.DB.GetQuickLaunchesByApp(tx, appID, user)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+	}
+
+	if err := tx.Commit(); err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 
@@ -173,9 +203,22 @@ func (h *Handlers) GetQuickLaunchHandler(c echo.Context) error {
 		return err
 	}
 
-	ql, err := h.DB.GetQuickLaunch(id, user)
+	tx, err := h.DB.BeginTx()
 	if err != nil {
-		return echo.NewHTTPError(http.StatusNotFound, err.Error())
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+	}
+	defer tx.Rollback() //nolint:errcheck
+
+	ql, err := h.DB.GetQuickLaunch(tx, id, user)
+	if err != nil {
+		if db.IsNotFound(err) {
+			return echo.NewHTTPError(http.StatusNotFound, err.Error())
+		}
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+	}
+
+	if err := tx.Commit(); err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 
 	return c.JSON(http.StatusOK, ql)
@@ -207,10 +250,19 @@ func (h *Handlers) UpdateQuickLaunchHandler(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
 	}
 
-	// Get the existing QL to merge with update and validate
-	existing, err := h.DB.GetQuickLaunch(id, user)
+	tx, err := h.DB.BeginTx()
 	if err != nil {
-		return echo.NewHTTPError(http.StatusNotFound, err.Error())
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+	}
+	defer tx.Rollback() //nolint:errcheck
+
+	// Get the existing QL to merge with update and validate
+	existing, err := h.DB.GetQuickLaunch(tx, id, user)
+	if err != nil {
+		if db.IsNotFound(err) {
+			return echo.NewHTTPError(http.StatusNotFound, err.Error())
+		}
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 
 	appID := existing.AppID
@@ -230,7 +282,7 @@ func (h *Handlers) UpdateQuickLaunchHandler(c echo.Context) error {
 	// Determine the submission config for validation
 	var submissionForValidation map[string]any
 	if uql.Submission != nil {
-		merged, merr := h.DB.MergeSubmission(id, user, *uql.Submission)
+		merged, merr := h.DB.MergeSubmission(tx, id, user, *uql.Submission)
 		if merr != nil {
 			return echo.NewHTTPError(http.StatusInternalServerError, merr.Error())
 		}
@@ -255,8 +307,12 @@ func (h *Handlers) UpdateQuickLaunchHandler(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
 	}
 
-	ql, err := h.DB.UpdateQuickLaunch(id, user, &uql)
+	ql, err := h.DB.UpdateQuickLaunch(tx, id, user, &uql)
 	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+	}
+
+	if err := tx.Commit(); err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 
@@ -281,7 +337,17 @@ func (h *Handlers) DeleteQuickLaunchHandler(c echo.Context) error {
 		return err
 	}
 
-	if err := h.DB.DeleteQuickLaunch(id, user); err != nil {
+	tx, err := h.DB.BeginTx()
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+	}
+	defer tx.Rollback() //nolint:errcheck
+
+	if err := h.DB.DeleteQuickLaunch(tx, id, user); err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+	}
+
+	if err := tx.Commit(); err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 
@@ -307,9 +373,22 @@ func (h *Handlers) QuickLaunchAppInfoHandler(c echo.Context) error {
 		return err
 	}
 
-	ql, err := h.DB.GetQuickLaunch(id, user)
+	tx, err := h.DB.BeginTx()
 	if err != nil {
-		return echo.NewHTTPError(http.StatusNotFound, err.Error())
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+	}
+	defer tx.Rollback() //nolint:errcheck
+
+	ql, err := h.DB.GetQuickLaunch(tx, id, user)
+	if err != nil {
+		if db.IsNotFound(err) {
+			return echo.NewHTTPError(http.StatusNotFound, err.Error())
+		}
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+	}
+
+	if err := tx.Commit(); err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 
 	app, err := h.AppsClient.GetAppVersion(user, systemID, ql.AppID, ql.AppVersionID)

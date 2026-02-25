@@ -12,7 +12,11 @@ func newDataInfoServer(t *testing.T, handler http.HandlerFunc) *DataInfoClient {
 	t.Helper()
 	ts := httptest.NewServer(handler)
 	t.Cleanup(ts.Close)
-	return NewDataInfoClient(ts.URL)
+	c, err := NewDataInfoClient(ts.URL)
+	if err != nil {
+		t.Fatalf("NewDataInfoClient: %v", err)
+	}
+	return c
 }
 
 func accessibleHandler(paths map[string]any) http.HandlerFunc {

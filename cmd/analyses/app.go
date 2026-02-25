@@ -33,9 +33,15 @@ type AnalysesApp struct {
 //	@BasePath		/
 
 // NewAnalysesApp creates and returns a new AnalysesApp.
-func NewAnalysesApp(database *sqlx.DB, appsBaseURL, dataInfoBaseURL string) *AnalysesApp {
-	appsClient := clients.NewAppsClient(appsBaseURL)
-	dataInfoClient := clients.NewDataInfoClient(dataInfoBaseURL)
+func NewAnalysesApp(database *sqlx.DB, appsBaseURL, dataInfoBaseURL string) (*AnalysesApp, error) {
+	appsClient, err := clients.NewAppsClient(appsBaseURL)
+	if err != nil {
+		return nil, err
+	}
+	dataInfoClient, err := clients.NewDataInfoClient(dataInfoBaseURL)
+	if err != nil {
+		return nil, err
+	}
 	handlers := httphandlers.NewHandlers(db.New(database), appsClient, dataInfoClient)
 
 	app := &AnalysesApp{
@@ -111,7 +117,7 @@ func NewAnalysesApp(database *sqlx.DB, appsBaseURL, dataInfoBaseURL string) *Ana
 	settings.PUT("/:username", handlers.SetConcurrentJobLimitHandler)
 	settings.DELETE("/:username", handlers.RemoveConcurrentJobLimitHandler)
 
-	return app
+	return app, nil
 }
 
 // Greeting lets the caller know the service is running.

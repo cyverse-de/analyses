@@ -36,8 +36,18 @@ func (h *Handlers) AddFavoriteHandler(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
 	}
 
-	fav, err := h.DB.AddFavorite(user, req.QuickLaunchID)
+	tx, err := h.DB.BeginTx()
 	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+	}
+	defer tx.Rollback() //nolint:errcheck
+
+	fav, err := h.DB.AddFavorite(tx, user, req.QuickLaunchID)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+	}
+
+	if err := tx.Commit(); err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 
@@ -63,9 +73,22 @@ func (h *Handlers) GetFavoriteHandler(c echo.Context) error {
 		return err
 	}
 
-	fav, err := h.DB.GetFavorite(user, id)
+	tx, err := h.DB.BeginTx()
 	if err != nil {
-		return echo.NewHTTPError(http.StatusNotFound, err.Error())
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+	}
+	defer tx.Rollback() //nolint:errcheck
+
+	fav, err := h.DB.GetFavorite(tx, user, id)
+	if err != nil {
+		if db.IsNotFound(err) {
+			return echo.NewHTTPError(http.StatusNotFound, err.Error())
+		}
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+	}
+
+	if err := tx.Commit(); err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 
 	return c.JSON(http.StatusOK, fav)
@@ -88,8 +111,18 @@ func (h *Handlers) GetAllFavoritesHandler(c echo.Context) error {
 		return err
 	}
 
-	favs, err := h.DB.GetAllFavorites(user)
+	tx, err := h.DB.BeginTx()
 	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+	}
+	defer tx.Rollback() //nolint:errcheck
+
+	favs, err := h.DB.GetAllFavorites(tx, user)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+	}
+
+	if err := tx.Commit(); err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 
@@ -114,10 +147,20 @@ func (h *Handlers) DeleteFavoriteHandler(c echo.Context) error {
 		return err
 	}
 
-	if err := h.DB.DeleteFavorite(user, id); err != nil {
+	tx, err := h.DB.BeginTx()
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+	}
+	defer tx.Rollback() //nolint:errcheck
+
+	if err := h.DB.DeleteFavorite(tx, user, id); err != nil {
 		if db.IsNotFound(err) {
 			return echo.NewHTTPError(http.StatusNotFound, err.Error())
 		}
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+	}
+
+	if err := tx.Commit(); err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 

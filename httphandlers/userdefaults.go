@@ -31,8 +31,18 @@ func (h *Handlers) AddUserDefaultHandler(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
 	}
 
-	ud, err := h.DB.AddUserDefault(user, &nud)
+	tx, err := h.DB.BeginTx()
 	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+	}
+	defer tx.Rollback() //nolint:errcheck
+
+	ud, err := h.DB.AddUserDefault(tx, user, &nud)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+	}
+
+	if err := tx.Commit(); err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 
@@ -58,9 +68,22 @@ func (h *Handlers) GetUserDefaultHandler(c echo.Context) error {
 		return err
 	}
 
-	ud, err := h.DB.GetUserDefault(user, id)
+	tx, err := h.DB.BeginTx()
 	if err != nil {
-		return echo.NewHTTPError(http.StatusNotFound, err.Error())
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+	}
+	defer tx.Rollback() //nolint:errcheck
+
+	ud, err := h.DB.GetUserDefault(tx, user, id)
+	if err != nil {
+		if db.IsNotFound(err) {
+			return echo.NewHTTPError(http.StatusNotFound, err.Error())
+		}
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+	}
+
+	if err := tx.Commit(); err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 
 	return c.JSON(http.StatusOK, ud)
@@ -83,8 +106,18 @@ func (h *Handlers) GetAllUserDefaultsHandler(c echo.Context) error {
 		return err
 	}
 
-	uds, err := h.DB.GetAllUserDefaults(user)
+	tx, err := h.DB.BeginTx()
 	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+	}
+	defer tx.Rollback() //nolint:errcheck
+
+	uds, err := h.DB.GetAllUserDefaults(tx, user)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+	}
+
+	if err := tx.Commit(); err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 
@@ -117,8 +150,25 @@ func (h *Handlers) UpdateUserDefaultHandler(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
 	}
 
-	ud, err := h.DB.UpdateUserDefault(id, user, &update)
+	if update.QuickLaunchID == "" || update.AppID == "" {
+		return echo.NewHTTPError(http.StatusBadRequest, "quick_launch_id and app_id are required")
+	}
+
+	tx, err := h.DB.BeginTx()
 	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+	}
+	defer tx.Rollback() //nolint:errcheck
+
+	ud, err := h.DB.UpdateUserDefault(tx, id, user, &update)
+	if err != nil {
+		if db.IsNotFound(err) {
+			return echo.NewHTTPError(http.StatusNotFound, err.Error())
+		}
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+	}
+
+	if err := tx.Commit(); err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 
@@ -143,10 +193,20 @@ func (h *Handlers) DeleteUserDefaultHandler(c echo.Context) error {
 		return err
 	}
 
-	if err := h.DB.DeleteUserDefault(user, id); err != nil {
+	tx, err := h.DB.BeginTx()
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+	}
+	defer tx.Rollback() //nolint:errcheck
+
+	if err := h.DB.DeleteUserDefault(tx, user, id); err != nil {
 		if db.IsNotFound(err) {
 			return echo.NewHTTPError(http.StatusNotFound, err.Error())
 		}
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+	}
+
+	if err := tx.Commit(); err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 

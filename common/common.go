@@ -45,3 +45,8 @@ func NewErrorResponse(err error) ErrorResponse {
 		return ErrorResponse{Message: val.Error()}
 	}
 }
+
+// NewErrorResponseWithCode constructs an ErrorResponse with an explicit error code.
+func NewErrorResponseWithCode(err error, code string) ErrorResponse {
+	return ErrorResponse{Message: err.Error(), ErrorCode: code}
+}

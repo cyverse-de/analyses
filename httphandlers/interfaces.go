@@ -8,40 +8,42 @@ import (
 
 // DatabaseStore defines all database operations used by HTTP handlers.
 type DatabaseStore interface {
+	BeginTx() (db.Tx, error)
+
 	// Quick Launches
-	GetQuickLaunch(id, user string) (*db.QuickLaunch, error)
-	GetAllQuickLaunches(user string) ([]db.QuickLaunch, error)
-	GetQuickLaunchesByApp(appID, user string) ([]db.QuickLaunch, error)
-	AddQuickLaunch(user string, nql *db.NewQuickLaunch) (*db.QuickLaunch, error)
-	UpdateQuickLaunch(id, user string, uql *db.UpdateQuickLaunchRequest) (*db.QuickLaunch, error)
-	DeleteQuickLaunch(id, user string) error
-	MergeSubmission(qlID, user string, newSubmission json.RawMessage) (json.RawMessage, error)
+	GetQuickLaunch(tx db.Tx, id, user string) (*db.QuickLaunch, error)
+	GetAllQuickLaunches(tx db.Tx, user string) ([]db.QuickLaunch, error)
+	GetQuickLaunchesByApp(tx db.Tx, appID, user string) ([]db.QuickLaunch, error)
+	AddQuickLaunch(tx db.Tx, user string, nql *db.NewQuickLaunch) (*db.QuickLaunch, error)
+	UpdateQuickLaunch(tx db.Tx, id, user string, uql *db.UpdateQuickLaunchRequest) (*db.QuickLaunch, error)
+	DeleteQuickLaunch(tx db.Tx, id, user string) error
+	MergeSubmission(tx db.Tx, qlID, user string, newSubmission json.RawMessage) (json.RawMessage, error)
 
 	// Favorites
-	GetAllFavorites(user string) ([]db.QuickLaunchFavorite, error)
-	GetFavorite(user, favID string) (*db.QuickLaunchFavorite, error)
-	AddFavorite(user, quickLaunchID string) (*db.QuickLaunchFavorite, error)
-	DeleteFavorite(user, favID string) error
+	GetAllFavorites(tx db.Tx, user string) ([]db.QuickLaunchFavorite, error)
+	GetFavorite(tx db.Tx, user, favID string) (*db.QuickLaunchFavorite, error)
+	AddFavorite(tx db.Tx, user, quickLaunchID string) (*db.QuickLaunchFavorite, error)
+	DeleteFavorite(tx db.Tx, user, favID string) error
 
 	// User Defaults
-	GetUserDefault(user, id string) (*db.QuickLaunchUserDefault, error)
-	GetAllUserDefaults(user string) ([]db.QuickLaunchUserDefault, error)
-	AddUserDefault(user string, nud *db.NewQuickLaunchUserDefault) (*db.QuickLaunchUserDefault, error)
-	UpdateUserDefault(id, user string, update *db.UpdateQuickLaunchUserDefaultRequest) (*db.QuickLaunchUserDefault, error)
-	DeleteUserDefault(user, id string) error
+	GetUserDefault(tx db.Tx, user, id string) (*db.QuickLaunchUserDefault, error)
+	GetAllUserDefaults(tx db.Tx, user string) ([]db.QuickLaunchUserDefault, error)
+	AddUserDefault(tx db.Tx, user string, nud *db.NewQuickLaunchUserDefault) (*db.QuickLaunchUserDefault, error)
+	UpdateUserDefault(tx db.Tx, id, user string, update *db.UpdateQuickLaunchUserDefaultRequest) (*db.QuickLaunchUserDefault, error)
+	DeleteUserDefault(tx db.Tx, user, id string) error
 
 	// Global Defaults
-	GetGlobalDefault(user, id string) (*db.QuickLaunchGlobalDefault, error)
-	GetAllGlobalDefaults(user string) ([]db.QuickLaunchGlobalDefault, error)
-	AddGlobalDefault(user string, ngd *db.NewQuickLaunchGlobalDefault) (*db.QuickLaunchGlobalDefault, error)
-	UpdateGlobalDefault(id, user string, update *db.UpdateQuickLaunchGlobalDefaultRequest) (*db.QuickLaunchGlobalDefault, error)
-	DeleteGlobalDefault(user, id string) error
+	GetGlobalDefault(tx db.Tx, user, id string) (*db.QuickLaunchGlobalDefault, error)
+	GetAllGlobalDefaults(tx db.Tx, user string) ([]db.QuickLaunchGlobalDefault, error)
+	AddGlobalDefault(tx db.Tx, user string, ngd *db.NewQuickLaunchGlobalDefault) (*db.QuickLaunchGlobalDefault, error)
+	UpdateGlobalDefault(tx db.Tx, id, user string, update *db.UpdateQuickLaunchGlobalDefaultRequest) (*db.QuickLaunchGlobalDefault, error)
+	DeleteGlobalDefault(tx db.Tx, user, id string) error
 
 	// Settings
-	ListConcurrentJobLimits() ([]db.ConcurrentJobLimit, error)
-	GetConcurrentJobLimit(username string) (*db.ConcurrentJobLimit, error)
-	SetConcurrentJobLimit(username string, limit int) (*db.ConcurrentJobLimit, error)
-	RemoveConcurrentJobLimit(username string) (*db.ConcurrentJobLimit, error)
+	ListConcurrentJobLimits(tx db.Tx) ([]db.ConcurrentJobLimit, error)
+	GetConcurrentJobLimit(tx db.Tx, username string) (*db.ConcurrentJobLimit, error)
+	SetConcurrentJobLimit(tx db.Tx, username string, limit int) (*db.ConcurrentJobLimit, error)
+	RemoveConcurrentJobLimit(tx db.Tx, username string) (*db.ConcurrentJobLimit, error)
 }
 
 // AppFetcher retrieves app definitions from the apps service.

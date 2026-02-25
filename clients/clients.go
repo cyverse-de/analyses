@@ -22,86 +22,74 @@ func stripDomain(username string) string {
 	return domainSuffix.ReplaceAllString(username, "")
 }
 
-// buildURL constructs a full URL from a base URL, path components, a username,
-// and optional query parameters. Each path component is URL-encoded.
-func buildURL(baseURL string, components []string, username string, query map[string]string) (string, error) {
-	u, err := url.Parse(baseURL)
-	if err != nil {
-		return "", fmt.Errorf("invalid base URL %q: %w", baseURL, err)
-	}
+// buildURL constructs a full URL from a parsed base URL, path components,
+// a username, and optional query parameters.
+func buildURL(baseURL *url.URL, components []string, username string, query map[string]string) string {
 	escaped := make([]string, len(components))
 	for i, c := range components {
 		escaped[i] = url.PathEscape(c)
 	}
-	u = u.JoinPath(escaped...)
+	u := baseURL.JoinPath(escaped...)
 	q := u.Query()
 	q.Set("user", stripDomain(username))
 	for k, v := range query {
 		q.Set(k, v)
 	}
 	u.RawQuery = q.Encode()
-	return u.String(), nil
+	return u.String()
 }
 
 // AppsClient interacts with the apps service.
 type AppsClient struct {
-	BaseURL string
+	baseURL *url.URL
 }
 
-// NewAppsClient creates a new AppsClient.
-func NewAppsClient(baseURL string) *AppsClient {
-	return &AppsClient{BaseURL: baseURL}
-}
-
-func (c *AppsClient) buildURL(components []string, username string, query map[string]string) (string, error) {
-	return buildURL(c.BaseURL, components, username, query)
+// NewAppsClient creates a new AppsClient. Returns an error if the base URL
+// is invalid, catching misconfiguration early before any requests are sent.
+func NewAppsClient(rawURL string) (*AppsClient, error) {
+	u, err := url.Parse(rawURL)
+	if err != nil {
+		return nil, fmt.Errorf("invalid apps base URL %q: %w", rawURL, err)
+	}
+	return &AppsClient{baseURL: u}, nil
 }
 
 // GetApp retrieves an app definition from the apps service.
 func (c *AppsClient) GetApp(user, systemID, appID string) (map[string]any, error) {
-	reqURL, err := c.buildURL([]string{"apps", systemID, appID}, user, nil)
-	if err != nil {
-		return nil, err
-	}
+	reqURL := buildURL(c.baseURL, []string{"apps", systemID, appID}, user, nil)
 	return doJSONGet(reqURL)
 }
 
 // GetAppVersion retrieves a specific app version from the apps service.
 func (c *AppsClient) GetAppVersion(user, systemID, appID, versionID string) (map[string]any, error) {
-	reqURL, err := c.buildURL([]string{"apps", systemID, appID, "versions", versionID}, user, nil)
-	if err != nil {
-		return nil, err
-	}
+	reqURL := buildURL(c.baseURL, []string{"apps", systemID, appID, "versions", versionID}, user, nil)
 	return doJSONGet(reqURL)
 }
 
 // DataInfoClient interacts with the data-info service.
 type DataInfoClient struct {
-	BaseURL string
+	baseURL *url.URL
 }
 
-// NewDataInfoClient creates a new DataInfoClient.
-func NewDataInfoClient(baseURL string) *DataInfoClient {
-	return &DataInfoClient{BaseURL: baseURL}
-}
-
-func (c *DataInfoClient) buildURL(components []string, username string, query map[string]string) (string, error) {
-	return buildURL(c.BaseURL, components, username, query)
+// NewDataInfoClient creates a new DataInfoClient. Returns an error if the base
+// URL is invalid, catching misconfiguration early.
+func NewDataInfoClient(rawURL string) (*DataInfoClient, error) {
+	u, err := url.Parse(rawURL)
+	if err != nil {
+		return nil, fmt.Errorf("invalid data-info base URL %q: %w", rawURL, err)
+	}
+	return &DataInfoClient{baseURL: u}, nil
 }
 
 // PathsAccessibleBy checks if paths are accessible by the given user.
-// The path-info endpoint returns 200 even for inaccessible paths, omitting
-// them from the response body. We verify that every requested path appears
-// in the response's "paths" map.
+// Uses the ignore-missing query parameter so data-info returns 200 even for
+// missing paths. We verify that every requested path appears in the response.
 func (c *DataInfoClient) PathsAccessibleBy(paths []string, user string) (bool, error) {
 	if len(paths) == 0 {
 		return true, nil
 	}
 
-	reqURL, err := c.buildURL([]string{"path-info"}, user, nil)
-	if err != nil {
-		return false, err
-	}
+	reqURL := buildURL(c.baseURL, []string{"path-info"}, user, map[string]string{"ignore-missing": "true"})
 	body := map[string]any{"paths": paths}
 	bodyBytes, err := json.Marshal(body)
 	if err != nil {
@@ -114,14 +102,6 @@ func (c *DataInfoClient) PathsAccessibleBy(paths []string, user string) (bool, e
 	}
 	defer resp.Body.Close() //nolint:errcheck
 
-	// The Clojure version treats a 500 with ERR_NOT_READABLE or
-	// ERR_DOES_NOT_EXIST as "not accessible". We simplify by treating any
-	// 500 the same way, since the body check on 200 is the primary mechanism.
-	if resp.StatusCode == http.StatusInternalServerError {
-		return false, nil
-	}
-	// Any other non-200 status is unexpected and likely a bug, so propagate
-	// it as an error rather than silently treating it as inaccessible.
 	if resp.StatusCode != http.StatusOK {
 		respBody, err := io.ReadAll(resp.Body)
 		if err != nil {
@@ -137,10 +117,6 @@ func (c *DataInfoClient) PathsAccessibleBy(paths []string, user string) (bool, e
 		return false, fmt.Errorf("failed to decode path-info response: %w", err)
 	}
 
-	// The path-info endpoint returns 200 even when some paths are not
-	// accessible to the user — those paths are simply omitted from the
-	// response's "paths" map. We must verify that every requested path
-	// is present in the response to confirm the user can access all of them.
 	for _, p := range paths {
 		if _, ok := result.Paths[p]; !ok {
 			return false, nil
@@ -158,10 +134,10 @@ const publicUser = "public"
 
 // AppParam represents a single parameter within an app parameter group.
 type AppParam struct {
-	ID           string      `json:"id"`
-	Type         string      `json:"type"`
-	Value        any `json:"value,omitempty"`
-	DefaultValue any `json:"defaultValue,omitempty"`
+	ID           string `json:"id"`
+	Type         string `json:"type"`
+	Value        any    `json:"value,omitempty"`
+	DefaultValue any    `json:"defaultValue,omitempty"`
 }
 
 // AppGroup represents a group of parameters in an app definition.
@@ -171,10 +147,10 @@ type AppGroup struct {
 
 // ValidationRequest holds the typed inputs for ValidateSubmission.
 type ValidationRequest struct {
-	App        map[string]any
-	Config     map[string]any
-	IsPublic   bool
-	User       string
+	App      map[string]any
+	Config   map[string]any
+	IsPublic bool
+	User     string
 }
 
 // extractAppGroups converts the untyped "groups" slice from an app definition
