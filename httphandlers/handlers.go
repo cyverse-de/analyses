@@ -3,18 +3,20 @@ package httphandlers
 import (
 	"net/http"
 
+	"github.com/cyverse-de/analyses/clients"
+	"github.com/cyverse-de/analyses/db"
 	"github.com/labstack/echo/v4"
 )
 
 // Handlers holds dependencies for HTTP handlers.
 type Handlers struct {
-	DB             DatabaseStore
-	AppsClient     AppFetcher
-	DataInfoClient PathChecker
+	DB             db.Store
+	AppsClient     clients.AppFetcher
+	DataInfoClient clients.PathChecker
 }
 
 // NewHandlers creates a new Handlers instance.
-func NewHandlers(database DatabaseStore, appsClient AppFetcher, dataInfoClient PathChecker) *Handlers {
+func NewHandlers(database db.Store, appsClient clients.AppFetcher, dataInfoClient clients.PathChecker) *Handlers {
 	return &Handlers{
 		DB:             database,
 		AppsClient:     appsClient,

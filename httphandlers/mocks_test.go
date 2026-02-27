@@ -55,7 +55,7 @@ func (m *mockTx) Rollback() error {
 	return nil
 }
 
-// mockDB implements DatabaseStore with function fields.
+// mockDB implements db.Store with function fields.
 type mockDB struct {
 	BeginTxFn func(ctx context.Context) (db.Tx, error)
 
@@ -170,7 +170,7 @@ func (m *mockDB) RemoveConcurrentJobLimit(ctx context.Context, tx db.Tx, usernam
 	return m.RemoveConcurrentJobLimitFn(ctx, tx, username)
 }
 
-// mockAppFetcher implements AppFetcher.
+// mockAppFetcher implements clients.AppFetcher.
 type mockAppFetcher struct {
 	GetAppFn        func(user, systemID, appID string) (map[string]any, error)
 	GetAppVersionFn func(user, systemID, appID, versionID string) (map[string]any, error)
@@ -183,7 +183,7 @@ func (m *mockAppFetcher) GetAppVersion(user, systemID, appID, versionID string) 
 	return m.GetAppVersionFn(user, systemID, appID, versionID)
 }
 
-// mockPathChecker implements PathChecker.
+// mockPathChecker implements clients.PathChecker.
 type mockPathChecker struct {
 	PathsAccessibleByFn func(paths []string, user string) (bool, error)
 }
