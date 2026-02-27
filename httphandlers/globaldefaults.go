@@ -21,6 +21,8 @@ import (
 //	@Failure		500		{object}	common.ErrorResponse
 //	@Router			/quicklaunch/defaults/global [post]
 func (h *Handlers) AddGlobalDefaultHandler(c echo.Context) error {
+	ctx := c.Request().Context()
+
 	user, err := requireUser(c)
 	if err != nil {
 		return err
@@ -31,13 +33,13 @@ func (h *Handlers) AddGlobalDefaultHandler(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
 	}
 
-	tx, err := h.DB.BeginTx()
+	tx, err := h.DB.BeginTx(ctx)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 	defer tx.Rollback() //nolint:errcheck
 
-	gd, err := h.DB.AddGlobalDefault(tx, user, &ngd)
+	gd, err := h.DB.AddGlobalDefault(ctx, tx, user, &ngd)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
@@ -62,19 +64,21 @@ func (h *Handlers) AddGlobalDefaultHandler(c echo.Context) error {
 //	@Failure		404		{object}	common.ErrorResponse
 //	@Router			/quicklaunch/defaults/global/{id} [get]
 func (h *Handlers) GetGlobalDefaultHandler(c echo.Context) error {
+	ctx := c.Request().Context()
 	id := c.Param("id")
+
 	user, err := requireUser(c)
 	if err != nil {
 		return err
 	}
 
-	tx, err := h.DB.BeginTx()
+	tx, err := h.DB.BeginTx(ctx)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 	defer tx.Rollback() //nolint:errcheck
 
-	gd, err := h.DB.GetGlobalDefault(tx, user, id)
+	gd, err := h.DB.GetGlobalDefault(ctx, tx, user, id)
 	if err != nil {
 		if db.IsNotFound(err) {
 			return echo.NewHTTPError(http.StatusNotFound, err.Error())
@@ -101,18 +105,20 @@ func (h *Handlers) GetGlobalDefaultHandler(c echo.Context) error {
 //	@Failure		500		{object}	common.ErrorResponse
 //	@Router			/quicklaunch/defaults/global [get]
 func (h *Handlers) GetAllGlobalDefaultsHandler(c echo.Context) error {
+	ctx := c.Request().Context()
+
 	user, err := requireUser(c)
 	if err != nil {
 		return err
 	}
 
-	tx, err := h.DB.BeginTx()
+	tx, err := h.DB.BeginTx(ctx)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 	defer tx.Rollback() //nolint:errcheck
 
-	gds, err := h.DB.GetAllGlobalDefaults(tx, user)
+	gds, err := h.DB.GetAllGlobalDefaults(ctx, tx, user)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
@@ -139,7 +145,9 @@ func (h *Handlers) GetAllGlobalDefaultsHandler(c echo.Context) error {
 //	@Failure		404		{object}	common.ErrorResponse
 //	@Router			/quicklaunch/defaults/global/{id} [patch]
 func (h *Handlers) UpdateGlobalDefaultHandler(c echo.Context) error {
+	ctx := c.Request().Context()
 	id := c.Param("id")
+
 	user, err := requireUser(c)
 	if err != nil {
 		return err
@@ -154,13 +162,13 @@ func (h *Handlers) UpdateGlobalDefaultHandler(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, "app_id and quick_launch_id are required")
 	}
 
-	tx, err := h.DB.BeginTx()
+	tx, err := h.DB.BeginTx(ctx)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 	defer tx.Rollback() //nolint:errcheck
 
-	gd, err := h.DB.UpdateGlobalDefault(tx, id, user, &update)
+	gd, err := h.DB.UpdateGlobalDefault(ctx, tx, id, user, &update)
 	if err != nil {
 		if db.IsNotFound(err) {
 			return echo.NewHTTPError(http.StatusNotFound, err.Error())
@@ -187,22 +195,21 @@ func (h *Handlers) UpdateGlobalDefaultHandler(c echo.Context) error {
 //	@Failure		400		{object}	common.ErrorResponse
 //	@Router			/quicklaunch/defaults/global/{id} [delete]
 func (h *Handlers) DeleteGlobalDefaultHandler(c echo.Context) error {
+	ctx := c.Request().Context()
 	id := c.Param("id")
+
 	user, err := requireUser(c)
 	if err != nil {
 		return err
 	}
 
-	tx, err := h.DB.BeginTx()
+	tx, err := h.DB.BeginTx(ctx)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 	defer tx.Rollback() //nolint:errcheck
 
-	if err := h.DB.DeleteGlobalDefault(tx, user, id); err != nil {
-		if db.IsNotFound(err) {
-			return echo.NewHTTPError(http.StatusNotFound, err.Error())
-		}
+	if err := h.DB.DeleteGlobalDefault(ctx, tx, user, id); err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 

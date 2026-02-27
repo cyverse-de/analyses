@@ -1,6 +1,7 @@
 package httphandlers
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"net/http"
@@ -12,7 +13,7 @@ import (
 	"github.com/labstack/echo/v4"
 )
 
-// stubResult is a minimal sql.Result used by mockTx.Exec.
+// stubResult is a minimal sql.Result used by mockTx.ExecContext.
 type stubResult struct{}
 
 func (stubResult) LastInsertId() (int64, error) { return 0, nil }
@@ -24,19 +25,19 @@ type mockTx struct {
 	RollbackFn func() error
 }
 
-func (m *mockTx) Exec(query string, args ...any) (sql.Result, error) {
+func (m *mockTx) ExecContext(_ context.Context, query string, args ...any) (sql.Result, error) {
 	return stubResult{}, nil
 }
 
-func (m *mockTx) QueryRow(query string, args ...any) *sql.Row {
+func (m *mockTx) QueryRowContext(_ context.Context, query string, args ...any) *sql.Row {
 	return nil
 }
 
-func (m *mockTx) QueryRowx(query string, args ...any) *sqlx.Row {
+func (m *mockTx) QueryRowxContext(_ context.Context, query string, args ...any) *sqlx.Row {
 	return nil
 }
 
-func (m *mockTx) Select(dest any, query string, args ...any) error {
+func (m *mockTx) SelectContext(_ context.Context, dest any, query string, args ...any) error {
 	return nil
 }
 
@@ -56,117 +57,117 @@ func (m *mockTx) Rollback() error {
 
 // mockDB implements DatabaseStore with function fields.
 type mockDB struct {
-	BeginTxFn func() (db.Tx, error)
+	BeginTxFn func(ctx context.Context) (db.Tx, error)
 
-	GetQuickLaunchFn        func(tx db.Tx, id, user string) (*db.QuickLaunch, error)
-	GetAllQuickLaunchesFn   func(tx db.Tx, user string) ([]db.QuickLaunch, error)
-	GetQuickLaunchesByAppFn func(tx db.Tx, appID, user string) ([]db.QuickLaunch, error)
-	AddQuickLaunchFn        func(tx db.Tx, user string, nql *db.NewQuickLaunch) (*db.QuickLaunch, error)
-	UpdateQuickLaunchFn     func(tx db.Tx, id, user string, uql *db.UpdateQuickLaunchRequest) (*db.QuickLaunch, error)
-	DeleteQuickLaunchFn     func(tx db.Tx, id, user string) error
-	MergeSubmissionFn       func(tx db.Tx, qlID, user string, newSubmission json.RawMessage) (json.RawMessage, error)
+	GetQuickLaunchFn        func(ctx context.Context, tx db.Tx, id, user string) (*db.QuickLaunch, error)
+	GetAllQuickLaunchesFn   func(ctx context.Context, tx db.Tx, user string) ([]db.QuickLaunch, error)
+	GetQuickLaunchesByAppFn func(ctx context.Context, tx db.Tx, appID, user string) ([]db.QuickLaunch, error)
+	AddQuickLaunchFn        func(ctx context.Context, tx db.Tx, user string, nql *db.NewQuickLaunch) (*db.QuickLaunch, error)
+	UpdateQuickLaunchFn     func(ctx context.Context, tx db.Tx, id, user string, uql *db.UpdateQuickLaunchRequest) (*db.QuickLaunch, error)
+	DeleteQuickLaunchFn     func(ctx context.Context, tx db.Tx, id, user string) error
+	MergeSubmissionFn       func(ctx context.Context, tx db.Tx, qlID, user string, newSubmission json.RawMessage) (json.RawMessage, error)
 
-	GetAllFavoritesFn func(tx db.Tx, user string) ([]db.QuickLaunchFavorite, error)
-	GetFavoriteFn     func(tx db.Tx, user, favID string) (*db.QuickLaunchFavorite, error)
-	AddFavoriteFn     func(tx db.Tx, user, quickLaunchID string) (*db.QuickLaunchFavorite, error)
-	DeleteFavoriteFn  func(tx db.Tx, user, favID string) error
+	GetAllFavoritesFn func(ctx context.Context, tx db.Tx, user string) ([]db.QuickLaunchFavorite, error)
+	GetFavoriteFn     func(ctx context.Context, tx db.Tx, user, favID string) (*db.QuickLaunchFavorite, error)
+	AddFavoriteFn     func(ctx context.Context, tx db.Tx, user, quickLaunchID string) (*db.QuickLaunchFavorite, error)
+	DeleteFavoriteFn  func(ctx context.Context, tx db.Tx, user, favID string) error
 
-	GetUserDefaultFn     func(tx db.Tx, user, id string) (*db.QuickLaunchUserDefault, error)
-	GetAllUserDefaultsFn func(tx db.Tx, user string) ([]db.QuickLaunchUserDefault, error)
-	AddUserDefaultFn     func(tx db.Tx, user string, nud *db.NewQuickLaunchUserDefault) (*db.QuickLaunchUserDefault, error)
-	UpdateUserDefaultFn  func(tx db.Tx, id, user string, update *db.UpdateQuickLaunchUserDefaultRequest) (*db.QuickLaunchUserDefault, error)
-	DeleteUserDefaultFn  func(tx db.Tx, user, id string) error
+	GetUserDefaultFn     func(ctx context.Context, tx db.Tx, user, id string) (*db.QuickLaunchUserDefault, error)
+	GetAllUserDefaultsFn func(ctx context.Context, tx db.Tx, user string) ([]db.QuickLaunchUserDefault, error)
+	AddUserDefaultFn     func(ctx context.Context, tx db.Tx, user string, nud *db.NewQuickLaunchUserDefault) (*db.QuickLaunchUserDefault, error)
+	UpdateUserDefaultFn  func(ctx context.Context, tx db.Tx, id, user string, update *db.UpdateQuickLaunchUserDefaultRequest) (*db.QuickLaunchUserDefault, error)
+	DeleteUserDefaultFn  func(ctx context.Context, tx db.Tx, user, id string) error
 
-	GetGlobalDefaultFn     func(tx db.Tx, user, id string) (*db.QuickLaunchGlobalDefault, error)
-	GetAllGlobalDefaultsFn func(tx db.Tx, user string) ([]db.QuickLaunchGlobalDefault, error)
-	AddGlobalDefaultFn     func(tx db.Tx, user string, ngd *db.NewQuickLaunchGlobalDefault) (*db.QuickLaunchGlobalDefault, error)
-	UpdateGlobalDefaultFn  func(tx db.Tx, id, user string, update *db.UpdateQuickLaunchGlobalDefaultRequest) (*db.QuickLaunchGlobalDefault, error)
-	DeleteGlobalDefaultFn  func(tx db.Tx, user, id string) error
+	GetGlobalDefaultFn     func(ctx context.Context, tx db.Tx, user, id string) (*db.QuickLaunchGlobalDefault, error)
+	GetAllGlobalDefaultsFn func(ctx context.Context, tx db.Tx, user string) ([]db.QuickLaunchGlobalDefault, error)
+	AddGlobalDefaultFn     func(ctx context.Context, tx db.Tx, user string, ngd *db.NewQuickLaunchGlobalDefault) (*db.QuickLaunchGlobalDefault, error)
+	UpdateGlobalDefaultFn  func(ctx context.Context, tx db.Tx, id, user string, update *db.UpdateQuickLaunchGlobalDefaultRequest) (*db.QuickLaunchGlobalDefault, error)
+	DeleteGlobalDefaultFn  func(ctx context.Context, tx db.Tx, user, id string) error
 
-	ListConcurrentJobLimitsFn  func(tx db.Tx) ([]db.ConcurrentJobLimit, error)
-	GetConcurrentJobLimitFn    func(tx db.Tx, username string) (*db.ConcurrentJobLimit, error)
-	SetConcurrentJobLimitFn    func(tx db.Tx, username string, limit int) (*db.ConcurrentJobLimit, error)
-	RemoveConcurrentJobLimitFn func(tx db.Tx, username string) (*db.ConcurrentJobLimit, error)
-}
-
-func (m *mockDB) BeginTx() (db.Tx, error) {
-	return m.BeginTxFn()
+	ListConcurrentJobLimitsFn  func(ctx context.Context, tx db.Tx) ([]db.ConcurrentJobLimit, error)
+	GetConcurrentJobLimitFn    func(ctx context.Context, tx db.Tx, username string) (*db.ConcurrentJobLimit, error)
+	SetConcurrentJobLimitFn    func(ctx context.Context, tx db.Tx, username string, limit int) (*db.ConcurrentJobLimit, error)
+	RemoveConcurrentJobLimitFn func(ctx context.Context, tx db.Tx, username string) (*db.ConcurrentJobLimit, error)
 }
 
-func (m *mockDB) GetQuickLaunch(tx db.Tx, id, user string) (*db.QuickLaunch, error) {
-	return m.GetQuickLaunchFn(tx, id, user)
+func (m *mockDB) BeginTx(ctx context.Context) (db.Tx, error) {
+	return m.BeginTxFn(ctx)
 }
-func (m *mockDB) GetAllQuickLaunches(tx db.Tx, user string) ([]db.QuickLaunch, error) {
-	return m.GetAllQuickLaunchesFn(tx, user)
+
+func (m *mockDB) GetQuickLaunch(ctx context.Context, tx db.Tx, id, user string) (*db.QuickLaunch, error) {
+	return m.GetQuickLaunchFn(ctx, tx, id, user)
 }
-func (m *mockDB) GetQuickLaunchesByApp(tx db.Tx, appID, user string) ([]db.QuickLaunch, error) {
-	return m.GetQuickLaunchesByAppFn(tx, appID, user)
+func (m *mockDB) GetAllQuickLaunches(ctx context.Context, tx db.Tx, user string) ([]db.QuickLaunch, error) {
+	return m.GetAllQuickLaunchesFn(ctx, tx, user)
 }
-func (m *mockDB) AddQuickLaunch(tx db.Tx, user string, nql *db.NewQuickLaunch) (*db.QuickLaunch, error) {
-	return m.AddQuickLaunchFn(tx, user, nql)
+func (m *mockDB) GetQuickLaunchesByApp(ctx context.Context, tx db.Tx, appID, user string) ([]db.QuickLaunch, error) {
+	return m.GetQuickLaunchesByAppFn(ctx, tx, appID, user)
 }
-func (m *mockDB) UpdateQuickLaunch(tx db.Tx, id, user string, uql *db.UpdateQuickLaunchRequest) (*db.QuickLaunch, error) {
-	return m.UpdateQuickLaunchFn(tx, id, user, uql)
+func (m *mockDB) AddQuickLaunch(ctx context.Context, tx db.Tx, user string, nql *db.NewQuickLaunch) (*db.QuickLaunch, error) {
+	return m.AddQuickLaunchFn(ctx, tx, user, nql)
 }
-func (m *mockDB) DeleteQuickLaunch(tx db.Tx, id, user string) error {
-	return m.DeleteQuickLaunchFn(tx, id, user)
+func (m *mockDB) UpdateQuickLaunch(ctx context.Context, tx db.Tx, id, user string, uql *db.UpdateQuickLaunchRequest) (*db.QuickLaunch, error) {
+	return m.UpdateQuickLaunchFn(ctx, tx, id, user, uql)
 }
-func (m *mockDB) MergeSubmission(tx db.Tx, qlID, user string, newSubmission json.RawMessage) (json.RawMessage, error) {
-	return m.MergeSubmissionFn(tx, qlID, user, newSubmission)
+func (m *mockDB) DeleteQuickLaunch(ctx context.Context, tx db.Tx, id, user string) error {
+	return m.DeleteQuickLaunchFn(ctx, tx, id, user)
 }
-func (m *mockDB) GetAllFavorites(tx db.Tx, user string) ([]db.QuickLaunchFavorite, error) {
-	return m.GetAllFavoritesFn(tx, user)
+func (m *mockDB) MergeSubmission(ctx context.Context, tx db.Tx, qlID, user string, newSubmission json.RawMessage) (json.RawMessage, error) {
+	return m.MergeSubmissionFn(ctx, tx, qlID, user, newSubmission)
 }
-func (m *mockDB) GetFavorite(tx db.Tx, user, favID string) (*db.QuickLaunchFavorite, error) {
-	return m.GetFavoriteFn(tx, user, favID)
+func (m *mockDB) GetAllFavorites(ctx context.Context, tx db.Tx, user string) ([]db.QuickLaunchFavorite, error) {
+	return m.GetAllFavoritesFn(ctx, tx, user)
 }
-func (m *mockDB) AddFavorite(tx db.Tx, user, quickLaunchID string) (*db.QuickLaunchFavorite, error) {
-	return m.AddFavoriteFn(tx, user, quickLaunchID)
+func (m *mockDB) GetFavorite(ctx context.Context, tx db.Tx, user, favID string) (*db.QuickLaunchFavorite, error) {
+	return m.GetFavoriteFn(ctx, tx, user, favID)
 }
-func (m *mockDB) DeleteFavorite(tx db.Tx, user, favID string) error {
-	return m.DeleteFavoriteFn(tx, user, favID)
+func (m *mockDB) AddFavorite(ctx context.Context, tx db.Tx, user, quickLaunchID string) (*db.QuickLaunchFavorite, error) {
+	return m.AddFavoriteFn(ctx, tx, user, quickLaunchID)
 }
-func (m *mockDB) GetUserDefault(tx db.Tx, user, id string) (*db.QuickLaunchUserDefault, error) {
-	return m.GetUserDefaultFn(tx, user, id)
+func (m *mockDB) DeleteFavorite(ctx context.Context, tx db.Tx, user, favID string) error {
+	return m.DeleteFavoriteFn(ctx, tx, user, favID)
 }
-func (m *mockDB) GetAllUserDefaults(tx db.Tx, user string) ([]db.QuickLaunchUserDefault, error) {
-	return m.GetAllUserDefaultsFn(tx, user)
+func (m *mockDB) GetUserDefault(ctx context.Context, tx db.Tx, user, id string) (*db.QuickLaunchUserDefault, error) {
+	return m.GetUserDefaultFn(ctx, tx, user, id)
 }
-func (m *mockDB) AddUserDefault(tx db.Tx, user string, nud *db.NewQuickLaunchUserDefault) (*db.QuickLaunchUserDefault, error) {
-	return m.AddUserDefaultFn(tx, user, nud)
+func (m *mockDB) GetAllUserDefaults(ctx context.Context, tx db.Tx, user string) ([]db.QuickLaunchUserDefault, error) {
+	return m.GetAllUserDefaultsFn(ctx, tx, user)
 }
-func (m *mockDB) UpdateUserDefault(tx db.Tx, id, user string, update *db.UpdateQuickLaunchUserDefaultRequest) (*db.QuickLaunchUserDefault, error) {
-	return m.UpdateUserDefaultFn(tx, id, user, update)
+func (m *mockDB) AddUserDefault(ctx context.Context, tx db.Tx, user string, nud *db.NewQuickLaunchUserDefault) (*db.QuickLaunchUserDefault, error) {
+	return m.AddUserDefaultFn(ctx, tx, user, nud)
 }
-func (m *mockDB) DeleteUserDefault(tx db.Tx, user, id string) error {
-	return m.DeleteUserDefaultFn(tx, user, id)
+func (m *mockDB) UpdateUserDefault(ctx context.Context, tx db.Tx, id, user string, update *db.UpdateQuickLaunchUserDefaultRequest) (*db.QuickLaunchUserDefault, error) {
+	return m.UpdateUserDefaultFn(ctx, tx, id, user, update)
 }
-func (m *mockDB) GetGlobalDefault(tx db.Tx, user, id string) (*db.QuickLaunchGlobalDefault, error) {
-	return m.GetGlobalDefaultFn(tx, user, id)
+func (m *mockDB) DeleteUserDefault(ctx context.Context, tx db.Tx, user, id string) error {
+	return m.DeleteUserDefaultFn(ctx, tx, user, id)
 }
-func (m *mockDB) GetAllGlobalDefaults(tx db.Tx, user string) ([]db.QuickLaunchGlobalDefault, error) {
-	return m.GetAllGlobalDefaultsFn(tx, user)
+func (m *mockDB) GetGlobalDefault(ctx context.Context, tx db.Tx, user, id string) (*db.QuickLaunchGlobalDefault, error) {
+	return m.GetGlobalDefaultFn(ctx, tx, user, id)
 }
-func (m *mockDB) AddGlobalDefault(tx db.Tx, user string, ngd *db.NewQuickLaunchGlobalDefault) (*db.QuickLaunchGlobalDefault, error) {
-	return m.AddGlobalDefaultFn(tx, user, ngd)
+func (m *mockDB) GetAllGlobalDefaults(ctx context.Context, tx db.Tx, user string) ([]db.QuickLaunchGlobalDefault, error) {
+	return m.GetAllGlobalDefaultsFn(ctx, tx, user)
 }
-func (m *mockDB) UpdateGlobalDefault(tx db.Tx, id, user string, update *db.UpdateQuickLaunchGlobalDefaultRequest) (*db.QuickLaunchGlobalDefault, error) {
-	return m.UpdateGlobalDefaultFn(tx, id, user, update)
+func (m *mockDB) AddGlobalDefault(ctx context.Context, tx db.Tx, user string, ngd *db.NewQuickLaunchGlobalDefault) (*db.QuickLaunchGlobalDefault, error) {
+	return m.AddGlobalDefaultFn(ctx, tx, user, ngd)
 }
-func (m *mockDB) DeleteGlobalDefault(tx db.Tx, user, id string) error {
-	return m.DeleteGlobalDefaultFn(tx, user, id)
+func (m *mockDB) UpdateGlobalDefault(ctx context.Context, tx db.Tx, id, user string, update *db.UpdateQuickLaunchGlobalDefaultRequest) (*db.QuickLaunchGlobalDefault, error) {
+	return m.UpdateGlobalDefaultFn(ctx, tx, id, user, update)
 }
-func (m *mockDB) ListConcurrentJobLimits(tx db.Tx) ([]db.ConcurrentJobLimit, error) {
-	return m.ListConcurrentJobLimitsFn(tx)
+func (m *mockDB) DeleteGlobalDefault(ctx context.Context, tx db.Tx, user, id string) error {
+	return m.DeleteGlobalDefaultFn(ctx, tx, user, id)
 }
-func (m *mockDB) GetConcurrentJobLimit(tx db.Tx, username string) (*db.ConcurrentJobLimit, error) {
-	return m.GetConcurrentJobLimitFn(tx, username)
+func (m *mockDB) ListConcurrentJobLimits(ctx context.Context, tx db.Tx) ([]db.ConcurrentJobLimit, error) {
+	return m.ListConcurrentJobLimitsFn(ctx, tx)
 }
-func (m *mockDB) SetConcurrentJobLimit(tx db.Tx, username string, limit int) (*db.ConcurrentJobLimit, error) {
-	return m.SetConcurrentJobLimitFn(tx, username, limit)
+func (m *mockDB) GetConcurrentJobLimit(ctx context.Context, tx db.Tx, username string) (*db.ConcurrentJobLimit, error) {
+	return m.GetConcurrentJobLimitFn(ctx, tx, username)
 }
-func (m *mockDB) RemoveConcurrentJobLimit(tx db.Tx, username string) (*db.ConcurrentJobLimit, error) {
-	return m.RemoveConcurrentJobLimitFn(tx, username)
+func (m *mockDB) SetConcurrentJobLimit(ctx context.Context, tx db.Tx, username string, limit int) (*db.ConcurrentJobLimit, error) {
+	return m.SetConcurrentJobLimitFn(ctx, tx, username, limit)
+}
+func (m *mockDB) RemoveConcurrentJobLimit(ctx context.Context, tx db.Tx, username string) (*db.ConcurrentJobLimit, error) {
+	return m.RemoveConcurrentJobLimitFn(ctx, tx, username)
 }
 
 // mockAppFetcher implements AppFetcher.

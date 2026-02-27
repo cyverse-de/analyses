@@ -26,6 +26,8 @@ type NewQuickLaunchFavoriteRequest struct {
 //	@Failure		500		{object}	common.ErrorResponse
 //	@Router			/quicklaunch/favorites [post]
 func (h *Handlers) AddFavoriteHandler(c echo.Context) error {
+	ctx := c.Request().Context()
+
 	user, err := requireUser(c)
 	if err != nil {
 		return err
@@ -36,13 +38,13 @@ func (h *Handlers) AddFavoriteHandler(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
 	}
 
-	tx, err := h.DB.BeginTx()
+	tx, err := h.DB.BeginTx(ctx)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 	defer tx.Rollback() //nolint:errcheck
 
-	fav, err := h.DB.AddFavorite(tx, user, req.QuickLaunchID)
+	fav, err := h.DB.AddFavorite(ctx, tx, user, req.QuickLaunchID)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
@@ -67,19 +69,21 @@ func (h *Handlers) AddFavoriteHandler(c echo.Context) error {
 //	@Failure		404		{object}	common.ErrorResponse
 //	@Router			/quicklaunch/favorites/{id} [get]
 func (h *Handlers) GetFavoriteHandler(c echo.Context) error {
+	ctx := c.Request().Context()
 	id := c.Param("id")
+
 	user, err := requireUser(c)
 	if err != nil {
 		return err
 	}
 
-	tx, err := h.DB.BeginTx()
+	tx, err := h.DB.BeginTx(ctx)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 	defer tx.Rollback() //nolint:errcheck
 
-	fav, err := h.DB.GetFavorite(tx, user, id)
+	fav, err := h.DB.GetFavorite(ctx, tx, user, id)
 	if err != nil {
 		if db.IsNotFound(err) {
 			return echo.NewHTTPError(http.StatusNotFound, err.Error())
@@ -106,18 +110,20 @@ func (h *Handlers) GetFavoriteHandler(c echo.Context) error {
 //	@Failure		500		{object}	common.ErrorResponse
 //	@Router			/quicklaunch/favorites [get]
 func (h *Handlers) GetAllFavoritesHandler(c echo.Context) error {
+	ctx := c.Request().Context()
+
 	user, err := requireUser(c)
 	if err != nil {
 		return err
 	}
 
-	tx, err := h.DB.BeginTx()
+	tx, err := h.DB.BeginTx(ctx)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 	defer tx.Rollback() //nolint:errcheck
 
-	favs, err := h.DB.GetAllFavorites(tx, user)
+	favs, err := h.DB.GetAllFavorites(ctx, tx, user)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
@@ -141,22 +147,21 @@ func (h *Handlers) GetAllFavoritesHandler(c echo.Context) error {
 //	@Failure		400		{object}	common.ErrorResponse
 //	@Router			/quicklaunch/favorites/{id} [delete]
 func (h *Handlers) DeleteFavoriteHandler(c echo.Context) error {
+	ctx := c.Request().Context()
 	id := c.Param("id")
+
 	user, err := requireUser(c)
 	if err != nil {
 		return err
 	}
 
-	tx, err := h.DB.BeginTx()
+	tx, err := h.DB.BeginTx(ctx)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 	defer tx.Rollback() //nolint:errcheck
 
-	if err := h.DB.DeleteFavorite(tx, user, id); err != nil {
-		if db.IsNotFound(err) {
-			return echo.NewHTTPError(http.StatusNotFound, err.Error())
-		}
+	if err := h.DB.DeleteFavorite(ctx, tx, user, id); err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 

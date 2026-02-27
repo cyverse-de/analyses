@@ -34,11 +34,11 @@ type AnalysesApp struct {
 
 // NewAnalysesApp creates and returns a new AnalysesApp.
 func NewAnalysesApp(database *sqlx.DB, appsBaseURL, dataInfoBaseURL string) (*AnalysesApp, error) {
-	appsClient, err := clients.NewAppsClient(appsBaseURL)
+	appsClient, err := clients.NewAppsClient(appsBaseURL, nil)
 	if err != nil {
 		return nil, err
 	}
-	dataInfoClient, err := clients.NewDataInfoClient(dataInfoBaseURL)
+	dataInfoClient, err := clients.NewDataInfoClient(dataInfoBaseURL, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -60,12 +60,8 @@ func NewAnalysesApp(database *sqlx.DB, appsBaseURL, dataInfoBaseURL string) (*An
 		case common.ErrorResponse:
 			code = http.StatusBadRequest
 			body = err
-		case *common.ErrorResponse:
-			code = http.StatusBadRequest
-			body = err
 		case *echo.HTTPError:
-			echoErr := err
-			code = echoErr.Code
+			code = err.Code
 			body = common.NewErrorResponse(err)
 		default:
 			body = common.NewErrorResponse(err)

@@ -11,9 +11,8 @@ import (
 	"time"
 )
 
-// httpClient is a shared HTTP client with a reasonable timeout for
-// inter-service calls to apps and data-info.
-var httpClient = &http.Client{Timeout: 30 * time.Second}
+// DefaultHTTPClient is the default HTTP client used when none is provided.
+var DefaultHTTPClient = &http.Client{Timeout: 30 * time.Second}
 
 var domainSuffix = regexp.MustCompile(`@.*$`)
 
@@ -41,44 +40,54 @@ func buildURL(baseURL *url.URL, components []string, username string, query map[
 
 // AppsClient interacts with the apps service.
 type AppsClient struct {
-	baseURL *url.URL
+	baseURL    *url.URL
+	httpClient *http.Client
 }
 
 // NewAppsClient creates a new AppsClient. Returns an error if the base URL
 // is invalid, catching misconfiguration early before any requests are sent.
-func NewAppsClient(rawURL string) (*AppsClient, error) {
+// If httpClient is nil, DefaultHTTPClient is used.
+func NewAppsClient(rawURL string, httpClient *http.Client) (*AppsClient, error) {
 	u, err := url.Parse(rawURL)
 	if err != nil {
 		return nil, fmt.Errorf("invalid apps base URL %q: %w", rawURL, err)
 	}
-	return &AppsClient{baseURL: u}, nil
+	if httpClient == nil {
+		httpClient = DefaultHTTPClient
+	}
+	return &AppsClient{baseURL: u, httpClient: httpClient}, nil
 }
 
 // GetApp retrieves an app definition from the apps service.
 func (c *AppsClient) GetApp(user, systemID, appID string) (map[string]any, error) {
 	reqURL := buildURL(c.baseURL, []string{"apps", systemID, appID}, user, nil)
-	return doJSONGet(reqURL)
+	return doJSONGet(c.httpClient, reqURL)
 }
 
 // GetAppVersion retrieves a specific app version from the apps service.
 func (c *AppsClient) GetAppVersion(user, systemID, appID, versionID string) (map[string]any, error) {
 	reqURL := buildURL(c.baseURL, []string{"apps", systemID, appID, "versions", versionID}, user, nil)
-	return doJSONGet(reqURL)
+	return doJSONGet(c.httpClient, reqURL)
 }
 
 // DataInfoClient interacts with the data-info service.
 type DataInfoClient struct {
-	baseURL *url.URL
+	baseURL    *url.URL
+	httpClient *http.Client
 }
 
 // NewDataInfoClient creates a new DataInfoClient. Returns an error if the base
 // URL is invalid, catching misconfiguration early.
-func NewDataInfoClient(rawURL string) (*DataInfoClient, error) {
+// If httpClient is nil, DefaultHTTPClient is used.
+func NewDataInfoClient(rawURL string, httpClient *http.Client) (*DataInfoClient, error) {
 	u, err := url.Parse(rawURL)
 	if err != nil {
 		return nil, fmt.Errorf("invalid data-info base URL %q: %w", rawURL, err)
 	}
-	return &DataInfoClient{baseURL: u}, nil
+	if httpClient == nil {
+		httpClient = DefaultHTTPClient
+	}
+	return &DataInfoClient{baseURL: u, httpClient: httpClient}, nil
 }
 
 // PathsAccessibleBy checks if paths are accessible by the given user.
@@ -96,7 +105,7 @@ func (c *DataInfoClient) PathsAccessibleBy(paths []string, user string) (bool, e
 		return false, err
 	}
 
-	resp, err := httpClient.Post(reqURL, "application/json", strings.NewReader(string(bodyBytes)))
+	resp, err := c.httpClient.Post(reqURL, "application/json", strings.NewReader(string(bodyBytes)))
 	if err != nil {
 		return false, err
 	}
@@ -125,11 +134,6 @@ func (c *DataInfoClient) PathsAccessibleBy(paths []string, user string) (bool, e
 	return true, nil
 }
 
-// PathChecker verifies path accessibility for a user.
-type PathChecker interface {
-	PathsAccessibleBy(paths []string, user string) (bool, error)
-}
-
 const publicUser = "public"
 
 // AppParam represents a single parameter within an app parameter group.
@@ -151,6 +155,11 @@ type ValidationRequest struct {
 	Config   map[string]any
 	IsPublic bool
 	User     string
+}
+
+// PathChecker verifies path accessibility for a user.
+type PathChecker interface {
+	PathsAccessibleBy(paths []string, user string) (bool, error)
 }
 
 // extractAppGroups converts the untyped "groups" slice from an app definition
@@ -284,8 +293,8 @@ func QuickLaunchAppInfo(submission, app map[string]any, sysID string) map[string
 	return app
 }
 
-func doJSONGet(reqURL string) (map[string]any, error) {
-	resp, err := httpClient.Get(reqURL)
+func doJSONGet(client *http.Client, reqURL string) (map[string]any, error) {
+	resp, err := client.Get(reqURL)
 	if err != nil {
 		return nil, fmt.Errorf("HTTP request failed: %w", err)
 	}

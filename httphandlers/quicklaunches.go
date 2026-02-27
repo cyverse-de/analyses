@@ -25,6 +25,9 @@ func NewHandlers(database DatabaseStore, appsClient AppFetcher, dataInfoClient P
 	}
 }
 
+// systemID is hard-coded to "de" because only DE apps currently support
+// Quick Launches. If other system IDs need support in the future, this
+// should be parameterized.
 const systemID = "de"
 
 // requireUser extracts the "user" query parameter from the request,
@@ -51,6 +54,8 @@ func requireUser(c echo.Context) (string, error) {
 //	@Failure		500		{object}	common.ErrorResponse
 //	@Router			/quicklaunches [post]
 func (h *Handlers) AddQuickLaunchHandler(c echo.Context) error {
+	ctx := c.Request().Context()
+
 	user, err := requireUser(c)
 	if err != nil {
 		return err
@@ -94,13 +99,13 @@ func (h *Handlers) AddQuickLaunchHandler(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
 	}
 
-	tx, err := h.DB.BeginTx()
+	tx, err := h.DB.BeginTx(ctx)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 	defer tx.Rollback() //nolint:errcheck
 
-	ql, err := h.DB.AddQuickLaunch(tx, user, &nql)
+	ql, err := h.DB.AddQuickLaunch(ctx, tx, user, &nql)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
@@ -124,18 +129,20 @@ func (h *Handlers) AddQuickLaunchHandler(c echo.Context) error {
 //	@Failure		500		{object}	common.ErrorResponse
 //	@Router			/quicklaunches [get]
 func (h *Handlers) GetAllQuickLaunchesHandler(c echo.Context) error {
+	ctx := c.Request().Context()
+
 	user, err := requireUser(c)
 	if err != nil {
 		return err
 	}
 
-	tx, err := h.DB.BeginTx()
+	tx, err := h.DB.BeginTx(ctx)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 	defer tx.Rollback() //nolint:errcheck
 
-	qls, err := h.DB.GetAllQuickLaunches(tx, user)
+	qls, err := h.DB.GetAllQuickLaunches(ctx, tx, user)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
@@ -160,19 +167,21 @@ func (h *Handlers) GetAllQuickLaunchesHandler(c echo.Context) error {
 //	@Failure		500		{object}	common.ErrorResponse
 //	@Router			/quicklaunches/apps/{id} [get]
 func (h *Handlers) GetQuickLaunchesByAppHandler(c echo.Context) error {
+	ctx := c.Request().Context()
 	appID := c.Param("id")
+
 	user, err := requireUser(c)
 	if err != nil {
 		return err
 	}
 
-	tx, err := h.DB.BeginTx()
+	tx, err := h.DB.BeginTx(ctx)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 	defer tx.Rollback() //nolint:errcheck
 
-	qls, err := h.DB.GetQuickLaunchesByApp(tx, appID, user)
+	qls, err := h.DB.GetQuickLaunchesByApp(ctx, tx, appID, user)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
@@ -197,19 +206,21 @@ func (h *Handlers) GetQuickLaunchesByAppHandler(c echo.Context) error {
 //	@Failure		404		{object}	common.ErrorResponse
 //	@Router			/quicklaunches/{id} [get]
 func (h *Handlers) GetQuickLaunchHandler(c echo.Context) error {
+	ctx := c.Request().Context()
 	id := c.Param("id")
+
 	user, err := requireUser(c)
 	if err != nil {
 		return err
 	}
 
-	tx, err := h.DB.BeginTx()
+	tx, err := h.DB.BeginTx(ctx)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 	defer tx.Rollback() //nolint:errcheck
 
-	ql, err := h.DB.GetQuickLaunch(tx, id, user)
+	ql, err := h.DB.GetQuickLaunch(ctx, tx, id, user)
 	if err != nil {
 		if db.IsNotFound(err) {
 			return echo.NewHTTPError(http.StatusNotFound, err.Error())
@@ -239,7 +250,9 @@ func (h *Handlers) GetQuickLaunchHandler(c echo.Context) error {
 //	@Failure		404		{object}	common.ErrorResponse
 //	@Router			/quicklaunches/{id} [patch]
 func (h *Handlers) UpdateQuickLaunchHandler(c echo.Context) error {
+	ctx := c.Request().Context()
 	id := c.Param("id")
+
 	user, err := requireUser(c)
 	if err != nil {
 		return err
@@ -250,14 +263,14 @@ func (h *Handlers) UpdateQuickLaunchHandler(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
 	}
 
-	tx, err := h.DB.BeginTx()
+	tx, err := h.DB.BeginTx(ctx)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 	defer tx.Rollback() //nolint:errcheck
 
 	// Get the existing QL to merge with update and validate
-	existing, err := h.DB.GetQuickLaunch(tx, id, user)
+	existing, err := h.DB.GetQuickLaunch(ctx, tx, id, user)
 	if err != nil {
 		if db.IsNotFound(err) {
 			return echo.NewHTTPError(http.StatusNotFound, err.Error())
@@ -282,7 +295,7 @@ func (h *Handlers) UpdateQuickLaunchHandler(c echo.Context) error {
 	// Determine the submission config for validation
 	var submissionForValidation map[string]any
 	if uql.Submission != nil {
-		merged, merr := h.DB.MergeSubmission(tx, id, user, *uql.Submission)
+		merged, merr := h.DB.MergeSubmission(ctx, tx, id, user, *uql.Submission)
 		if merr != nil {
 			return echo.NewHTTPError(http.StatusInternalServerError, merr.Error())
 		}
@@ -307,7 +320,7 @@ func (h *Handlers) UpdateQuickLaunchHandler(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
 	}
 
-	ql, err := h.DB.UpdateQuickLaunch(tx, id, user, &uql)
+	ql, err := h.DB.UpdateQuickLaunch(ctx, tx, id, user, &uql)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
@@ -331,19 +344,21 @@ func (h *Handlers) UpdateQuickLaunchHandler(c echo.Context) error {
 //	@Failure		400		{object}	common.ErrorResponse
 //	@Router			/quicklaunches/{id} [delete]
 func (h *Handlers) DeleteQuickLaunchHandler(c echo.Context) error {
+	ctx := c.Request().Context()
 	id := c.Param("id")
+
 	user, err := requireUser(c)
 	if err != nil {
 		return err
 	}
 
-	tx, err := h.DB.BeginTx()
+	tx, err := h.DB.BeginTx(ctx)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 	defer tx.Rollback() //nolint:errcheck
 
-	if err := h.DB.DeleteQuickLaunch(tx, id, user); err != nil {
+	if err := h.DB.DeleteQuickLaunch(ctx, tx, id, user); err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 
@@ -367,19 +382,21 @@ func (h *Handlers) DeleteQuickLaunchHandler(c echo.Context) error {
 //	@Failure		404		{object}	common.ErrorResponse
 //	@Router			/quicklaunches/{id}/app-info [get]
 func (h *Handlers) QuickLaunchAppInfoHandler(c echo.Context) error {
+	ctx := c.Request().Context()
 	id := c.Param("id")
+
 	user, err := requireUser(c)
 	if err != nil {
 		return err
 	}
 
-	tx, err := h.DB.BeginTx()
+	tx, err := h.DB.BeginTx(ctx)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 	defer tx.Rollback() //nolint:errcheck
 
-	ql, err := h.DB.GetQuickLaunch(tx, id, user)
+	ql, err := h.DB.GetQuickLaunch(ctx, tx, id, user)
 	if err != nil {
 		if db.IsNotFound(err) {
 			return echo.NewHTTPError(http.StatusNotFound, err.Error())

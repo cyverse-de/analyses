@@ -1,6 +1,7 @@
 package httphandlers
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -33,8 +34,8 @@ func assertNoError(t *testing.T, err error) {
 }
 
 // defaultBeginTx is a helper that returns a BeginTxFn producing a plain mockTx.
-func defaultBeginTx() func() (db.Tx, error) {
-	return func() (db.Tx, error) { return &mockTx{}, nil }
+func defaultBeginTx() func(context.Context) (db.Tx, error) {
+	return func(context.Context) (db.Tx, error) { return &mockTx{}, nil }
 }
 
 // ──────────────────────────────────────────────────────────────
@@ -51,7 +52,7 @@ func TestGetAllQuickLaunchesHandler(t *testing.T) {
 
 	t.Run("begin tx error", func(t *testing.T) {
 		h := &Handlers{DB: &mockDB{
-			BeginTxFn: func() (db.Tx, error) { return nil, fmt.Errorf("tx error") },
+			BeginTxFn: func(context.Context) (db.Tx, error) { return nil, fmt.Errorf("tx error") },
 		}}
 		c, _ := newTestContext(http.MethodGet, "/quicklaunches", "", nil, map[string]string{"user": "testuser"})
 		err := h.GetAllQuickLaunchesHandler(c)
@@ -61,7 +62,7 @@ func TestGetAllQuickLaunchesHandler(t *testing.T) {
 	t.Run("db error", func(t *testing.T) {
 		h := &Handlers{DB: &mockDB{
 			BeginTxFn: defaultBeginTx(),
-			GetAllQuickLaunchesFn: func(_ db.Tx, user string) ([]db.QuickLaunch, error) {
+			GetAllQuickLaunchesFn: func(_ context.Context, _ db.Tx, user string) ([]db.QuickLaunch, error) {
 				return nil, fmt.Errorf("db error")
 			},
 		}}
@@ -73,7 +74,7 @@ func TestGetAllQuickLaunchesHandler(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
 		h := &Handlers{DB: &mockDB{
 			BeginTxFn: defaultBeginTx(),
-			GetAllQuickLaunchesFn: func(_ db.Tx, user string) ([]db.QuickLaunch, error) {
+			GetAllQuickLaunchesFn: func(_ context.Context, _ db.Tx, user string) ([]db.QuickLaunch, error) {
 				return []db.QuickLaunch{{ID: "ql-1"}}, nil
 			},
 		}}
@@ -96,7 +97,7 @@ func TestGetQuickLaunchesByAppHandler(t *testing.T) {
 
 	t.Run("begin tx error", func(t *testing.T) {
 		h := &Handlers{DB: &mockDB{
-			BeginTxFn: func() (db.Tx, error) { return nil, fmt.Errorf("tx error") },
+			BeginTxFn: func(context.Context) (db.Tx, error) { return nil, fmt.Errorf("tx error") },
 		}}
 		c, _ := newTestContext(http.MethodGet, "/quicklaunches/apps/app-1", "", map[string]string{"id": "app-1"}, map[string]string{"user": "u"})
 		err := h.GetQuickLaunchesByAppHandler(c)
@@ -106,7 +107,7 @@ func TestGetQuickLaunchesByAppHandler(t *testing.T) {
 	t.Run("db error", func(t *testing.T) {
 		h := &Handlers{DB: &mockDB{
 			BeginTxFn: defaultBeginTx(),
-			GetQuickLaunchesByAppFn: func(_ db.Tx, appID, user string) ([]db.QuickLaunch, error) {
+			GetQuickLaunchesByAppFn: func(_ context.Context, _ db.Tx, appID, user string) ([]db.QuickLaunch, error) {
 				return nil, fmt.Errorf("db error")
 			},
 		}}
@@ -118,7 +119,7 @@ func TestGetQuickLaunchesByAppHandler(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
 		h := &Handlers{DB: &mockDB{
 			BeginTxFn: defaultBeginTx(),
-			GetQuickLaunchesByAppFn: func(_ db.Tx, appID, user string) ([]db.QuickLaunch, error) {
+			GetQuickLaunchesByAppFn: func(_ context.Context, _ db.Tx, appID, user string) ([]db.QuickLaunch, error) {
 				return []db.QuickLaunch{}, nil
 			},
 		}}
@@ -141,7 +142,7 @@ func TestGetQuickLaunchHandler(t *testing.T) {
 
 	t.Run("begin tx error", func(t *testing.T) {
 		h := &Handlers{DB: &mockDB{
-			BeginTxFn: func() (db.Tx, error) { return nil, fmt.Errorf("tx error") },
+			BeginTxFn: func(context.Context) (db.Tx, error) { return nil, fmt.Errorf("tx error") },
 		}}
 		c, _ := newTestContext(http.MethodGet, "/quicklaunches/ql-1", "", map[string]string{"id": "ql-1"}, map[string]string{"user": "u"})
 		err := h.GetQuickLaunchHandler(c)
@@ -151,7 +152,7 @@ func TestGetQuickLaunchHandler(t *testing.T) {
 	t.Run("not found", func(t *testing.T) {
 		h := &Handlers{DB: &mockDB{
 			BeginTxFn: defaultBeginTx(),
-			GetQuickLaunchFn: func(_ db.Tx, id, user string) (*db.QuickLaunch, error) {
+			GetQuickLaunchFn: func(_ context.Context, _ db.Tx, id, user string) (*db.QuickLaunch, error) {
 				return nil, db.NewNotFoundError("quick launch", id)
 			},
 		}}
@@ -163,7 +164,7 @@ func TestGetQuickLaunchHandler(t *testing.T) {
 	t.Run("db error", func(t *testing.T) {
 		h := &Handlers{DB: &mockDB{
 			BeginTxFn: defaultBeginTx(),
-			GetQuickLaunchFn: func(_ db.Tx, id, user string) (*db.QuickLaunch, error) {
+			GetQuickLaunchFn: func(_ context.Context, _ db.Tx, id, user string) (*db.QuickLaunch, error) {
 				return nil, fmt.Errorf("connection refused")
 			},
 		}}
@@ -175,7 +176,7 @@ func TestGetQuickLaunchHandler(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
 		h := &Handlers{DB: &mockDB{
 			BeginTxFn: defaultBeginTx(),
-			GetQuickLaunchFn: func(_ db.Tx, id, user string) (*db.QuickLaunch, error) {
+			GetQuickLaunchFn: func(_ context.Context, _ db.Tx, id, user string) (*db.QuickLaunch, error) {
 				return &db.QuickLaunch{ID: id}, nil
 			},
 		}}
@@ -262,7 +263,7 @@ func TestAddQuickLaunchHandler(t *testing.T) {
 				},
 			},
 			DB: &mockDB{
-				BeginTxFn: func() (db.Tx, error) { return nil, fmt.Errorf("tx error") },
+				BeginTxFn: func(context.Context) (db.Tx, error) { return nil, fmt.Errorf("tx error") },
 			},
 		}
 		sub := map[string]any{"config": map[string]any{}}
@@ -288,7 +289,7 @@ func TestAddQuickLaunchHandler(t *testing.T) {
 			},
 			DB: &mockDB{
 				BeginTxFn: defaultBeginTx(),
-				AddQuickLaunchFn: func(_ db.Tx, user string, nql *db.NewQuickLaunch) (*db.QuickLaunch, error) {
+				AddQuickLaunchFn: func(_ context.Context, _ db.Tx, user string, nql *db.NewQuickLaunch) (*db.QuickLaunch, error) {
 					return nil, fmt.Errorf("db error")
 				},
 			},
@@ -316,7 +317,7 @@ func TestAddQuickLaunchHandler(t *testing.T) {
 			},
 			DB: &mockDB{
 				BeginTxFn: defaultBeginTx(),
-				AddQuickLaunchFn: func(_ db.Tx, user string, nql *db.NewQuickLaunch) (*db.QuickLaunch, error) {
+				AddQuickLaunchFn: func(_ context.Context, _ db.Tx, user string, nql *db.NewQuickLaunch) (*db.QuickLaunch, error) {
 					return &db.QuickLaunch{ID: "new-ql"}, nil
 				},
 			},
@@ -353,7 +354,7 @@ func TestAddQuickLaunchHandler(t *testing.T) {
 			},
 			DB: &mockDB{
 				BeginTxFn: defaultBeginTx(),
-				AddQuickLaunchFn: func(_ db.Tx, user string, nql *db.NewQuickLaunch) (*db.QuickLaunch, error) {
+				AddQuickLaunchFn: func(_ context.Context, _ db.Tx, user string, nql *db.NewQuickLaunch) (*db.QuickLaunch, error) {
 					return &db.QuickLaunch{ID: "new-ql"}, nil
 				},
 			},
@@ -388,7 +389,7 @@ func TestUpdateQuickLaunchHandler(t *testing.T) {
 
 	t.Run("begin tx error", func(t *testing.T) {
 		h := &Handlers{DB: &mockDB{
-			BeginTxFn: func() (db.Tx, error) { return nil, fmt.Errorf("tx error") },
+			BeginTxFn: func(context.Context) (db.Tx, error) { return nil, fmt.Errorf("tx error") },
 		}}
 		c, _ := newTestContext(http.MethodPatch, "/quicklaunches/ql-1", `{}`, map[string]string{"id": "ql-1"}, map[string]string{"user": "u"})
 		err := h.UpdateQuickLaunchHandler(c)
@@ -398,7 +399,7 @@ func TestUpdateQuickLaunchHandler(t *testing.T) {
 	t.Run("ql not found", func(t *testing.T) {
 		h := &Handlers{DB: &mockDB{
 			BeginTxFn: defaultBeginTx(),
-			GetQuickLaunchFn: func(_ db.Tx, id, user string) (*db.QuickLaunch, error) {
+			GetQuickLaunchFn: func(_ context.Context, _ db.Tx, id, user string) (*db.QuickLaunch, error) {
 				return nil, db.NewNotFoundError("quick launch", id)
 			},
 		}}
@@ -411,7 +412,7 @@ func TestUpdateQuickLaunchHandler(t *testing.T) {
 		h := &Handlers{
 			DB: &mockDB{
 				BeginTxFn: defaultBeginTx(),
-				GetQuickLaunchFn: func(_ db.Tx, id, user string) (*db.QuickLaunch, error) {
+				GetQuickLaunchFn: func(_ context.Context, _ db.Tx, id, user string) (*db.QuickLaunch, error) {
 					return &db.QuickLaunch{
 						ID: id, AppID: "app-1", AppVersionID: "v1",
 						Submission: json.RawMessage(`{"config":{}}`),
@@ -433,13 +434,13 @@ func TestUpdateQuickLaunchHandler(t *testing.T) {
 		h := &Handlers{
 			DB: &mockDB{
 				BeginTxFn: defaultBeginTx(),
-				GetQuickLaunchFn: func(_ db.Tx, id, user string) (*db.QuickLaunch, error) {
+				GetQuickLaunchFn: func(_ context.Context, _ db.Tx, id, user string) (*db.QuickLaunch, error) {
 					return &db.QuickLaunch{
 						ID: id, AppID: "app-1", AppVersionID: "v1",
 						Submission: json.RawMessage(`{"config":{}}`),
 					}, nil
 				},
-				MergeSubmissionFn: func(_ db.Tx, qlID, user string, newSubmission json.RawMessage) (json.RawMessage, error) {
+				MergeSubmissionFn: func(_ context.Context, _ db.Tx, qlID, user string, newSubmission json.RawMessage) (json.RawMessage, error) {
 					return nil, fmt.Errorf("merge error")
 				},
 			},
@@ -466,13 +467,13 @@ func TestUpdateQuickLaunchHandler(t *testing.T) {
 		h := &Handlers{
 			DB: &mockDB{
 				BeginTxFn: defaultBeginTx(),
-				GetQuickLaunchFn: func(_ db.Tx, id, user string) (*db.QuickLaunch, error) {
+				GetQuickLaunchFn: func(_ context.Context, _ db.Tx, id, user string) (*db.QuickLaunch, error) {
 					return &db.QuickLaunch{
 						ID: id, AppID: "app-1", AppVersionID: "v1",
 						Submission: json.RawMessage(`{"config":{}}`),
 					}, nil
 				},
-				UpdateQuickLaunchFn: func(_ db.Tx, id, user string, uql *db.UpdateQuickLaunchRequest) (*db.QuickLaunch, error) {
+				UpdateQuickLaunchFn: func(_ context.Context, _ db.Tx, id, user string, uql *db.UpdateQuickLaunchRequest) (*db.QuickLaunch, error) {
 					return &db.QuickLaunch{ID: id}, nil
 				},
 			},
@@ -509,7 +510,7 @@ func TestDeleteQuickLaunchHandler(t *testing.T) {
 
 	t.Run("begin tx error", func(t *testing.T) {
 		h := &Handlers{DB: &mockDB{
-			BeginTxFn: func() (db.Tx, error) { return nil, fmt.Errorf("tx error") },
+			BeginTxFn: func(context.Context) (db.Tx, error) { return nil, fmt.Errorf("tx error") },
 		}}
 		c, _ := newTestContext(http.MethodDelete, "/quicklaunches/ql-1", "", map[string]string{"id": "ql-1"}, map[string]string{"user": "u"})
 		err := h.DeleteQuickLaunchHandler(c)
@@ -519,7 +520,7 @@ func TestDeleteQuickLaunchHandler(t *testing.T) {
 	t.Run("db error", func(t *testing.T) {
 		h := &Handlers{DB: &mockDB{
 			BeginTxFn: defaultBeginTx(),
-			DeleteQuickLaunchFn: func(_ db.Tx, id, user string) error {
+			DeleteQuickLaunchFn: func(_ context.Context, _ db.Tx, id, user string) error {
 				return fmt.Errorf("db error")
 			},
 		}}
@@ -531,7 +532,7 @@ func TestDeleteQuickLaunchHandler(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
 		h := &Handlers{DB: &mockDB{
 			BeginTxFn: defaultBeginTx(),
-			DeleteQuickLaunchFn: func(_ db.Tx, id, user string) error {
+			DeleteQuickLaunchFn: func(_ context.Context, _ db.Tx, id, user string) error {
 				return nil
 			},
 		}}
@@ -554,7 +555,7 @@ func TestQuickLaunchAppInfoHandler(t *testing.T) {
 
 	t.Run("begin tx error", func(t *testing.T) {
 		h := &Handlers{DB: &mockDB{
-			BeginTxFn: func() (db.Tx, error) { return nil, fmt.Errorf("tx error") },
+			BeginTxFn: func(context.Context) (db.Tx, error) { return nil, fmt.Errorf("tx error") },
 		}}
 		c, _ := newTestContext(http.MethodGet, "/quicklaunches/ql-1/app-info", "", map[string]string{"id": "ql-1"}, map[string]string{"user": "u"})
 		err := h.QuickLaunchAppInfoHandler(c)
@@ -564,7 +565,7 @@ func TestQuickLaunchAppInfoHandler(t *testing.T) {
 	t.Run("ql not found", func(t *testing.T) {
 		h := &Handlers{DB: &mockDB{
 			BeginTxFn: defaultBeginTx(),
-			GetQuickLaunchFn: func(_ db.Tx, id, user string) (*db.QuickLaunch, error) {
+			GetQuickLaunchFn: func(_ context.Context, _ db.Tx, id, user string) (*db.QuickLaunch, error) {
 				return nil, db.NewNotFoundError("quick launch", id)
 			},
 		}}
@@ -577,7 +578,7 @@ func TestQuickLaunchAppInfoHandler(t *testing.T) {
 		h := &Handlers{
 			DB: &mockDB{
 				BeginTxFn: defaultBeginTx(),
-				GetQuickLaunchFn: func(_ db.Tx, id, user string) (*db.QuickLaunch, error) {
+				GetQuickLaunchFn: func(_ context.Context, _ db.Tx, id, user string) (*db.QuickLaunch, error) {
 					return &db.QuickLaunch{
 						ID: id, AppID: "app-1", AppVersionID: "v1",
 						Submission: json.RawMessage(`{"config":{}}`),
@@ -599,7 +600,7 @@ func TestQuickLaunchAppInfoHandler(t *testing.T) {
 		h := &Handlers{
 			DB: &mockDB{
 				BeginTxFn: defaultBeginTx(),
-				GetQuickLaunchFn: func(_ db.Tx, id, user string) (*db.QuickLaunch, error) {
+				GetQuickLaunchFn: func(_ context.Context, _ db.Tx, id, user string) (*db.QuickLaunch, error) {
 					return &db.QuickLaunch{
 						ID: id, AppID: "app-1", AppVersionID: "v1",
 						Submission: json.RawMessage(`{"config":{"p1":"val"},"debug":false}`),
@@ -650,7 +651,7 @@ func TestAddFavoriteHandler(t *testing.T) {
 
 	t.Run("begin tx error", func(t *testing.T) {
 		h := &Handlers{DB: &mockDB{
-			BeginTxFn: func() (db.Tx, error) { return nil, fmt.Errorf("tx error") },
+			BeginTxFn: func(context.Context) (db.Tx, error) { return nil, fmt.Errorf("tx error") },
 		}}
 		c, _ := newTestContext(http.MethodPost, "/quicklaunch/favorites", `{"quick_launch_id":"ql-1"}`, nil, map[string]string{"user": "u"})
 		err := h.AddFavoriteHandler(c)
@@ -660,7 +661,7 @@ func TestAddFavoriteHandler(t *testing.T) {
 	t.Run("db error", func(t *testing.T) {
 		h := &Handlers{DB: &mockDB{
 			BeginTxFn: defaultBeginTx(),
-			AddFavoriteFn: func(_ db.Tx, user, quickLaunchID string) (*db.QuickLaunchFavorite, error) {
+			AddFavoriteFn: func(_ context.Context, _ db.Tx, user, quickLaunchID string) (*db.QuickLaunchFavorite, error) {
 				return nil, fmt.Errorf("db error")
 			},
 		}}
@@ -672,7 +673,7 @@ func TestAddFavoriteHandler(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
 		h := &Handlers{DB: &mockDB{
 			BeginTxFn: defaultBeginTx(),
-			AddFavoriteFn: func(_ db.Tx, user, quickLaunchID string) (*db.QuickLaunchFavorite, error) {
+			AddFavoriteFn: func(_ context.Context, _ db.Tx, user, quickLaunchID string) (*db.QuickLaunchFavorite, error) {
 				return &db.QuickLaunchFavorite{ID: "fav-1", QuickLaunchID: quickLaunchID}, nil
 			},
 		}}
@@ -695,7 +696,7 @@ func TestGetFavoriteHandler(t *testing.T) {
 
 	t.Run("begin tx error", func(t *testing.T) {
 		h := &Handlers{DB: &mockDB{
-			BeginTxFn: func() (db.Tx, error) { return nil, fmt.Errorf("tx error") },
+			BeginTxFn: func(context.Context) (db.Tx, error) { return nil, fmt.Errorf("tx error") },
 		}}
 		c, _ := newTestContext(http.MethodGet, "/quicklaunch/favorites/fav-1", "", map[string]string{"id": "fav-1"}, map[string]string{"user": "u"})
 		err := h.GetFavoriteHandler(c)
@@ -705,7 +706,7 @@ func TestGetFavoriteHandler(t *testing.T) {
 	t.Run("not found", func(t *testing.T) {
 		h := &Handlers{DB: &mockDB{
 			BeginTxFn: defaultBeginTx(),
-			GetFavoriteFn: func(_ db.Tx, user, favID string) (*db.QuickLaunchFavorite, error) {
+			GetFavoriteFn: func(_ context.Context, _ db.Tx, user, favID string) (*db.QuickLaunchFavorite, error) {
 				return nil, db.NewNotFoundError("favorite", favID)
 			},
 		}}
@@ -717,7 +718,7 @@ func TestGetFavoriteHandler(t *testing.T) {
 	t.Run("other db error", func(t *testing.T) {
 		h := &Handlers{DB: &mockDB{
 			BeginTxFn: defaultBeginTx(),
-			GetFavoriteFn: func(_ db.Tx, user, favID string) (*db.QuickLaunchFavorite, error) {
+			GetFavoriteFn: func(_ context.Context, _ db.Tx, user, favID string) (*db.QuickLaunchFavorite, error) {
 				return nil, fmt.Errorf("connection refused")
 			},
 		}}
@@ -729,7 +730,7 @@ func TestGetFavoriteHandler(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
 		h := &Handlers{DB: &mockDB{
 			BeginTxFn: defaultBeginTx(),
-			GetFavoriteFn: func(_ db.Tx, user, favID string) (*db.QuickLaunchFavorite, error) {
+			GetFavoriteFn: func(_ context.Context, _ db.Tx, user, favID string) (*db.QuickLaunchFavorite, error) {
 				return &db.QuickLaunchFavorite{ID: favID}, nil
 			},
 		}}
@@ -752,7 +753,7 @@ func TestGetAllFavoritesHandler(t *testing.T) {
 
 	t.Run("begin tx error", func(t *testing.T) {
 		h := &Handlers{DB: &mockDB{
-			BeginTxFn: func() (db.Tx, error) { return nil, fmt.Errorf("tx error") },
+			BeginTxFn: func(context.Context) (db.Tx, error) { return nil, fmt.Errorf("tx error") },
 		}}
 		c, _ := newTestContext(http.MethodGet, "/quicklaunch/favorites", "", nil, map[string]string{"user": "u"})
 		err := h.GetAllFavoritesHandler(c)
@@ -762,7 +763,7 @@ func TestGetAllFavoritesHandler(t *testing.T) {
 	t.Run("db error", func(t *testing.T) {
 		h := &Handlers{DB: &mockDB{
 			BeginTxFn: defaultBeginTx(),
-			GetAllFavoritesFn: func(_ db.Tx, user string) ([]db.QuickLaunchFavorite, error) {
+			GetAllFavoritesFn: func(_ context.Context, _ db.Tx, user string) ([]db.QuickLaunchFavorite, error) {
 				return nil, fmt.Errorf("db error")
 			},
 		}}
@@ -774,7 +775,7 @@ func TestGetAllFavoritesHandler(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
 		h := &Handlers{DB: &mockDB{
 			BeginTxFn: defaultBeginTx(),
-			GetAllFavoritesFn: func(_ db.Tx, user string) ([]db.QuickLaunchFavorite, error) {
+			GetAllFavoritesFn: func(_ context.Context, _ db.Tx, user string) ([]db.QuickLaunchFavorite, error) {
 				return []db.QuickLaunchFavorite{}, nil
 			},
 		}}
@@ -797,29 +798,17 @@ func TestDeleteFavoriteHandler(t *testing.T) {
 
 	t.Run("begin tx error", func(t *testing.T) {
 		h := &Handlers{DB: &mockDB{
-			BeginTxFn: func() (db.Tx, error) { return nil, fmt.Errorf("tx error") },
+			BeginTxFn: func(context.Context) (db.Tx, error) { return nil, fmt.Errorf("tx error") },
 		}}
 		c, _ := newTestContext(http.MethodDelete, "/quicklaunch/favorites/fav-1", "", map[string]string{"id": "fav-1"}, map[string]string{"user": "u"})
 		err := h.DeleteFavoriteHandler(c)
 		assertHTTPError(t, err, http.StatusInternalServerError)
 	})
 
-	t.Run("not found error", func(t *testing.T) {
+	t.Run("db error", func(t *testing.T) {
 		h := &Handlers{DB: &mockDB{
 			BeginTxFn: defaultBeginTx(),
-			DeleteFavoriteFn: func(_ db.Tx, user, favID string) error {
-				return db.NewNotFoundError("favorite", favID)
-			},
-		}}
-		c, _ := newTestContext(http.MethodDelete, "/quicklaunch/favorites/fav-1", "", map[string]string{"id": "fav-1"}, map[string]string{"user": "u"})
-		err := h.DeleteFavoriteHandler(c)
-		assertHTTPError(t, err, http.StatusNotFound)
-	})
-
-	t.Run("other db error", func(t *testing.T) {
-		h := &Handlers{DB: &mockDB{
-			BeginTxFn: defaultBeginTx(),
-			DeleteFavoriteFn: func(_ db.Tx, user, favID string) error {
+			DeleteFavoriteFn: func(_ context.Context, _ db.Tx, user, favID string) error {
 				return fmt.Errorf("connection refused")
 			},
 		}}
@@ -831,7 +820,7 @@ func TestDeleteFavoriteHandler(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
 		h := &Handlers{DB: &mockDB{
 			BeginTxFn: defaultBeginTx(),
-			DeleteFavoriteFn: func(_ db.Tx, user, favID string) error {
+			DeleteFavoriteFn: func(_ context.Context, _ db.Tx, user, favID string) error {
 				return nil
 			},
 		}}
@@ -865,7 +854,7 @@ func TestAddUserDefaultHandler(t *testing.T) {
 
 	t.Run("begin tx error", func(t *testing.T) {
 		h := &Handlers{DB: &mockDB{
-			BeginTxFn: func() (db.Tx, error) { return nil, fmt.Errorf("tx error") },
+			BeginTxFn: func(context.Context) (db.Tx, error) { return nil, fmt.Errorf("tx error") },
 		}}
 		c, _ := newTestContext(http.MethodPost, "/quicklaunch/defaults/user", `{"quick_launch_id":"ql-1","app_id":"a-1"}`, nil, map[string]string{"user": "u"})
 		err := h.AddUserDefaultHandler(c)
@@ -875,7 +864,7 @@ func TestAddUserDefaultHandler(t *testing.T) {
 	t.Run("db error", func(t *testing.T) {
 		h := &Handlers{DB: &mockDB{
 			BeginTxFn: defaultBeginTx(),
-			AddUserDefaultFn: func(_ db.Tx, user string, nud *db.NewQuickLaunchUserDefault) (*db.QuickLaunchUserDefault, error) {
+			AddUserDefaultFn: func(_ context.Context, _ db.Tx, user string, nud *db.NewQuickLaunchUserDefault) (*db.QuickLaunchUserDefault, error) {
 				return nil, fmt.Errorf("db error")
 			},
 		}}
@@ -887,7 +876,7 @@ func TestAddUserDefaultHandler(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
 		h := &Handlers{DB: &mockDB{
 			BeginTxFn: defaultBeginTx(),
-			AddUserDefaultFn: func(_ db.Tx, user string, nud *db.NewQuickLaunchUserDefault) (*db.QuickLaunchUserDefault, error) {
+			AddUserDefaultFn: func(_ context.Context, _ db.Tx, user string, nud *db.NewQuickLaunchUserDefault) (*db.QuickLaunchUserDefault, error) {
 				return &db.QuickLaunchUserDefault{ID: "ud-1"}, nil
 			},
 		}}
@@ -910,7 +899,7 @@ func TestGetUserDefaultHandler(t *testing.T) {
 
 	t.Run("begin tx error", func(t *testing.T) {
 		h := &Handlers{DB: &mockDB{
-			BeginTxFn: func() (db.Tx, error) { return nil, fmt.Errorf("tx error") },
+			BeginTxFn: func(context.Context) (db.Tx, error) { return nil, fmt.Errorf("tx error") },
 		}}
 		c, _ := newTestContext(http.MethodGet, "/quicklaunch/defaults/user/ud-1", "", map[string]string{"id": "ud-1"}, map[string]string{"user": "u"})
 		err := h.GetUserDefaultHandler(c)
@@ -920,7 +909,7 @@ func TestGetUserDefaultHandler(t *testing.T) {
 	t.Run("not found", func(t *testing.T) {
 		h := &Handlers{DB: &mockDB{
 			BeginTxFn: defaultBeginTx(),
-			GetUserDefaultFn: func(_ db.Tx, user, id string) (*db.QuickLaunchUserDefault, error) {
+			GetUserDefaultFn: func(_ context.Context, _ db.Tx, user, id string) (*db.QuickLaunchUserDefault, error) {
 				return nil, db.NewNotFoundError("user default", id)
 			},
 		}}
@@ -932,7 +921,7 @@ func TestGetUserDefaultHandler(t *testing.T) {
 	t.Run("other db error", func(t *testing.T) {
 		h := &Handlers{DB: &mockDB{
 			BeginTxFn: defaultBeginTx(),
-			GetUserDefaultFn: func(_ db.Tx, user, id string) (*db.QuickLaunchUserDefault, error) {
+			GetUserDefaultFn: func(_ context.Context, _ db.Tx, user, id string) (*db.QuickLaunchUserDefault, error) {
 				return nil, fmt.Errorf("connection refused")
 			},
 		}}
@@ -944,7 +933,7 @@ func TestGetUserDefaultHandler(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
 		h := &Handlers{DB: &mockDB{
 			BeginTxFn: defaultBeginTx(),
-			GetUserDefaultFn: func(_ db.Tx, user, id string) (*db.QuickLaunchUserDefault, error) {
+			GetUserDefaultFn: func(_ context.Context, _ db.Tx, user, id string) (*db.QuickLaunchUserDefault, error) {
 				return &db.QuickLaunchUserDefault{ID: id}, nil
 			},
 		}}
@@ -967,7 +956,7 @@ func TestGetAllUserDefaultsHandler(t *testing.T) {
 
 	t.Run("begin tx error", func(t *testing.T) {
 		h := &Handlers{DB: &mockDB{
-			BeginTxFn: func() (db.Tx, error) { return nil, fmt.Errorf("tx error") },
+			BeginTxFn: func(context.Context) (db.Tx, error) { return nil, fmt.Errorf("tx error") },
 		}}
 		c, _ := newTestContext(http.MethodGet, "/quicklaunch/defaults/user", "", nil, map[string]string{"user": "u"})
 		err := h.GetAllUserDefaultsHandler(c)
@@ -977,7 +966,7 @@ func TestGetAllUserDefaultsHandler(t *testing.T) {
 	t.Run("db error", func(t *testing.T) {
 		h := &Handlers{DB: &mockDB{
 			BeginTxFn: defaultBeginTx(),
-			GetAllUserDefaultsFn: func(_ db.Tx, user string) ([]db.QuickLaunchUserDefault, error) {
+			GetAllUserDefaultsFn: func(_ context.Context, _ db.Tx, user string) ([]db.QuickLaunchUserDefault, error) {
 				return nil, fmt.Errorf("db error")
 			},
 		}}
@@ -989,7 +978,7 @@ func TestGetAllUserDefaultsHandler(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
 		h := &Handlers{DB: &mockDB{
 			BeginTxFn: defaultBeginTx(),
-			GetAllUserDefaultsFn: func(_ db.Tx, user string) ([]db.QuickLaunchUserDefault, error) {
+			GetAllUserDefaultsFn: func(_ context.Context, _ db.Tx, user string) ([]db.QuickLaunchUserDefault, error) {
 				return []db.QuickLaunchUserDefault{}, nil
 			},
 		}}
@@ -1026,7 +1015,7 @@ func TestUpdateUserDefaultHandler(t *testing.T) {
 
 	t.Run("begin tx error", func(t *testing.T) {
 		h := &Handlers{DB: &mockDB{
-			BeginTxFn: func() (db.Tx, error) { return nil, fmt.Errorf("tx error") },
+			BeginTxFn: func(context.Context) (db.Tx, error) { return nil, fmt.Errorf("tx error") },
 		}}
 		c, _ := newTestContext(http.MethodPatch, "/quicklaunch/defaults/user/ud-1", `{"quick_launch_id":"ql-1","app_id":"a-1"}`, map[string]string{"id": "ud-1"}, map[string]string{"user": "u"})
 		err := h.UpdateUserDefaultHandler(c)
@@ -1036,7 +1025,7 @@ func TestUpdateUserDefaultHandler(t *testing.T) {
 	t.Run("db error", func(t *testing.T) {
 		h := &Handlers{DB: &mockDB{
 			BeginTxFn: defaultBeginTx(),
-			UpdateUserDefaultFn: func(_ db.Tx, id, user string, update *db.UpdateQuickLaunchUserDefaultRequest) (*db.QuickLaunchUserDefault, error) {
+			UpdateUserDefaultFn: func(_ context.Context, _ db.Tx, id, user string, update *db.UpdateQuickLaunchUserDefaultRequest) (*db.QuickLaunchUserDefault, error) {
 				return nil, fmt.Errorf("db error")
 			},
 		}}
@@ -1048,7 +1037,7 @@ func TestUpdateUserDefaultHandler(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
 		h := &Handlers{DB: &mockDB{
 			BeginTxFn: defaultBeginTx(),
-			UpdateUserDefaultFn: func(_ db.Tx, id, user string, update *db.UpdateQuickLaunchUserDefaultRequest) (*db.QuickLaunchUserDefault, error) {
+			UpdateUserDefaultFn: func(_ context.Context, _ db.Tx, id, user string, update *db.UpdateQuickLaunchUserDefaultRequest) (*db.QuickLaunchUserDefault, error) {
 				return &db.QuickLaunchUserDefault{ID: id}, nil
 			},
 		}}
@@ -1071,29 +1060,17 @@ func TestDeleteUserDefaultHandler(t *testing.T) {
 
 	t.Run("begin tx error", func(t *testing.T) {
 		h := &Handlers{DB: &mockDB{
-			BeginTxFn: func() (db.Tx, error) { return nil, fmt.Errorf("tx error") },
+			BeginTxFn: func(context.Context) (db.Tx, error) { return nil, fmt.Errorf("tx error") },
 		}}
 		c, _ := newTestContext(http.MethodDelete, "/quicklaunch/defaults/user/ud-1", "", map[string]string{"id": "ud-1"}, map[string]string{"user": "u"})
 		err := h.DeleteUserDefaultHandler(c)
 		assertHTTPError(t, err, http.StatusInternalServerError)
 	})
 
-	t.Run("not found", func(t *testing.T) {
+	t.Run("db error", func(t *testing.T) {
 		h := &Handlers{DB: &mockDB{
 			BeginTxFn: defaultBeginTx(),
-			DeleteUserDefaultFn: func(_ db.Tx, user, id string) error {
-				return db.NewNotFoundError("user default", id)
-			},
-		}}
-		c, _ := newTestContext(http.MethodDelete, "/quicklaunch/defaults/user/ud-1", "", map[string]string{"id": "ud-1"}, map[string]string{"user": "u"})
-		err := h.DeleteUserDefaultHandler(c)
-		assertHTTPError(t, err, http.StatusNotFound)
-	})
-
-	t.Run("other db error", func(t *testing.T) {
-		h := &Handlers{DB: &mockDB{
-			BeginTxFn: defaultBeginTx(),
-			DeleteUserDefaultFn: func(_ db.Tx, user, id string) error {
+			DeleteUserDefaultFn: func(_ context.Context, _ db.Tx, user, id string) error {
 				return fmt.Errorf("connection refused")
 			},
 		}}
@@ -1105,7 +1082,7 @@ func TestDeleteUserDefaultHandler(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
 		h := &Handlers{DB: &mockDB{
 			BeginTxFn: defaultBeginTx(),
-			DeleteUserDefaultFn: func(_ db.Tx, user, id string) error {
+			DeleteUserDefaultFn: func(_ context.Context, _ db.Tx, user, id string) error {
 				return nil
 			},
 		}}
@@ -1139,7 +1116,7 @@ func TestAddGlobalDefaultHandler(t *testing.T) {
 
 	t.Run("begin tx error", func(t *testing.T) {
 		h := &Handlers{DB: &mockDB{
-			BeginTxFn: func() (db.Tx, error) { return nil, fmt.Errorf("tx error") },
+			BeginTxFn: func(context.Context) (db.Tx, error) { return nil, fmt.Errorf("tx error") },
 		}}
 		c, _ := newTestContext(http.MethodPost, "/quicklaunch/defaults/global", `{"app_id":"a-1","quick_launch_id":"ql-1"}`, nil, map[string]string{"user": "u"})
 		err := h.AddGlobalDefaultHandler(c)
@@ -1149,7 +1126,7 @@ func TestAddGlobalDefaultHandler(t *testing.T) {
 	t.Run("db error", func(t *testing.T) {
 		h := &Handlers{DB: &mockDB{
 			BeginTxFn: defaultBeginTx(),
-			AddGlobalDefaultFn: func(_ db.Tx, user string, ngd *db.NewQuickLaunchGlobalDefault) (*db.QuickLaunchGlobalDefault, error) {
+			AddGlobalDefaultFn: func(_ context.Context, _ db.Tx, user string, ngd *db.NewQuickLaunchGlobalDefault) (*db.QuickLaunchGlobalDefault, error) {
 				return nil, fmt.Errorf("db error")
 			},
 		}}
@@ -1161,7 +1138,7 @@ func TestAddGlobalDefaultHandler(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
 		h := &Handlers{DB: &mockDB{
 			BeginTxFn: defaultBeginTx(),
-			AddGlobalDefaultFn: func(_ db.Tx, user string, ngd *db.NewQuickLaunchGlobalDefault) (*db.QuickLaunchGlobalDefault, error) {
+			AddGlobalDefaultFn: func(_ context.Context, _ db.Tx, user string, ngd *db.NewQuickLaunchGlobalDefault) (*db.QuickLaunchGlobalDefault, error) {
 				return &db.QuickLaunchGlobalDefault{ID: "gd-1"}, nil
 			},
 		}}
@@ -1184,7 +1161,7 @@ func TestGetGlobalDefaultHandler(t *testing.T) {
 
 	t.Run("begin tx error", func(t *testing.T) {
 		h := &Handlers{DB: &mockDB{
-			BeginTxFn: func() (db.Tx, error) { return nil, fmt.Errorf("tx error") },
+			BeginTxFn: func(context.Context) (db.Tx, error) { return nil, fmt.Errorf("tx error") },
 		}}
 		c, _ := newTestContext(http.MethodGet, "/quicklaunch/defaults/global/gd-1", "", map[string]string{"id": "gd-1"}, map[string]string{"user": "u"})
 		err := h.GetGlobalDefaultHandler(c)
@@ -1194,7 +1171,7 @@ func TestGetGlobalDefaultHandler(t *testing.T) {
 	t.Run("not found", func(t *testing.T) {
 		h := &Handlers{DB: &mockDB{
 			BeginTxFn: defaultBeginTx(),
-			GetGlobalDefaultFn: func(_ db.Tx, user, id string) (*db.QuickLaunchGlobalDefault, error) {
+			GetGlobalDefaultFn: func(_ context.Context, _ db.Tx, user, id string) (*db.QuickLaunchGlobalDefault, error) {
 				return nil, db.NewNotFoundError("global default", id)
 			},
 		}}
@@ -1206,7 +1183,7 @@ func TestGetGlobalDefaultHandler(t *testing.T) {
 	t.Run("other db error", func(t *testing.T) {
 		h := &Handlers{DB: &mockDB{
 			BeginTxFn: defaultBeginTx(),
-			GetGlobalDefaultFn: func(_ db.Tx, user, id string) (*db.QuickLaunchGlobalDefault, error) {
+			GetGlobalDefaultFn: func(_ context.Context, _ db.Tx, user, id string) (*db.QuickLaunchGlobalDefault, error) {
 				return nil, fmt.Errorf("connection refused")
 			},
 		}}
@@ -1218,7 +1195,7 @@ func TestGetGlobalDefaultHandler(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
 		h := &Handlers{DB: &mockDB{
 			BeginTxFn: defaultBeginTx(),
-			GetGlobalDefaultFn: func(_ db.Tx, user, id string) (*db.QuickLaunchGlobalDefault, error) {
+			GetGlobalDefaultFn: func(_ context.Context, _ db.Tx, user, id string) (*db.QuickLaunchGlobalDefault, error) {
 				return &db.QuickLaunchGlobalDefault{ID: id}, nil
 			},
 		}}
@@ -1241,7 +1218,7 @@ func TestGetAllGlobalDefaultsHandler(t *testing.T) {
 
 	t.Run("begin tx error", func(t *testing.T) {
 		h := &Handlers{DB: &mockDB{
-			BeginTxFn: func() (db.Tx, error) { return nil, fmt.Errorf("tx error") },
+			BeginTxFn: func(context.Context) (db.Tx, error) { return nil, fmt.Errorf("tx error") },
 		}}
 		c, _ := newTestContext(http.MethodGet, "/quicklaunch/defaults/global", "", nil, map[string]string{"user": "u"})
 		err := h.GetAllGlobalDefaultsHandler(c)
@@ -1251,7 +1228,7 @@ func TestGetAllGlobalDefaultsHandler(t *testing.T) {
 	t.Run("db error", func(t *testing.T) {
 		h := &Handlers{DB: &mockDB{
 			BeginTxFn: defaultBeginTx(),
-			GetAllGlobalDefaultsFn: func(_ db.Tx, user string) ([]db.QuickLaunchGlobalDefault, error) {
+			GetAllGlobalDefaultsFn: func(_ context.Context, _ db.Tx, user string) ([]db.QuickLaunchGlobalDefault, error) {
 				return nil, fmt.Errorf("db error")
 			},
 		}}
@@ -1263,7 +1240,7 @@ func TestGetAllGlobalDefaultsHandler(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
 		h := &Handlers{DB: &mockDB{
 			BeginTxFn: defaultBeginTx(),
-			GetAllGlobalDefaultsFn: func(_ db.Tx, user string) ([]db.QuickLaunchGlobalDefault, error) {
+			GetAllGlobalDefaultsFn: func(_ context.Context, _ db.Tx, user string) ([]db.QuickLaunchGlobalDefault, error) {
 				return []db.QuickLaunchGlobalDefault{}, nil
 			},
 		}}
@@ -1300,7 +1277,7 @@ func TestUpdateGlobalDefaultHandler(t *testing.T) {
 
 	t.Run("begin tx error", func(t *testing.T) {
 		h := &Handlers{DB: &mockDB{
-			BeginTxFn: func() (db.Tx, error) { return nil, fmt.Errorf("tx error") },
+			BeginTxFn: func(context.Context) (db.Tx, error) { return nil, fmt.Errorf("tx error") },
 		}}
 		c, _ := newTestContext(http.MethodPatch, "/quicklaunch/defaults/global/gd-1", `{"app_id":"a-1","quick_launch_id":"ql-1"}`, map[string]string{"id": "gd-1"}, map[string]string{"user": "u"})
 		err := h.UpdateGlobalDefaultHandler(c)
@@ -1310,7 +1287,7 @@ func TestUpdateGlobalDefaultHandler(t *testing.T) {
 	t.Run("db error", func(t *testing.T) {
 		h := &Handlers{DB: &mockDB{
 			BeginTxFn: defaultBeginTx(),
-			UpdateGlobalDefaultFn: func(_ db.Tx, id, user string, update *db.UpdateQuickLaunchGlobalDefaultRequest) (*db.QuickLaunchGlobalDefault, error) {
+			UpdateGlobalDefaultFn: func(_ context.Context, _ db.Tx, id, user string, update *db.UpdateQuickLaunchGlobalDefaultRequest) (*db.QuickLaunchGlobalDefault, error) {
 				return nil, fmt.Errorf("db error")
 			},
 		}}
@@ -1322,7 +1299,7 @@ func TestUpdateGlobalDefaultHandler(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
 		h := &Handlers{DB: &mockDB{
 			BeginTxFn: defaultBeginTx(),
-			UpdateGlobalDefaultFn: func(_ db.Tx, id, user string, update *db.UpdateQuickLaunchGlobalDefaultRequest) (*db.QuickLaunchGlobalDefault, error) {
+			UpdateGlobalDefaultFn: func(_ context.Context, _ db.Tx, id, user string, update *db.UpdateQuickLaunchGlobalDefaultRequest) (*db.QuickLaunchGlobalDefault, error) {
 				return &db.QuickLaunchGlobalDefault{ID: id}, nil
 			},
 		}}
@@ -1345,29 +1322,17 @@ func TestDeleteGlobalDefaultHandler(t *testing.T) {
 
 	t.Run("begin tx error", func(t *testing.T) {
 		h := &Handlers{DB: &mockDB{
-			BeginTxFn: func() (db.Tx, error) { return nil, fmt.Errorf("tx error") },
+			BeginTxFn: func(context.Context) (db.Tx, error) { return nil, fmt.Errorf("tx error") },
 		}}
 		c, _ := newTestContext(http.MethodDelete, "/quicklaunch/defaults/global/gd-1", "", map[string]string{"id": "gd-1"}, map[string]string{"user": "u"})
 		err := h.DeleteGlobalDefaultHandler(c)
 		assertHTTPError(t, err, http.StatusInternalServerError)
 	})
 
-	t.Run("not found", func(t *testing.T) {
+	t.Run("db error", func(t *testing.T) {
 		h := &Handlers{DB: &mockDB{
 			BeginTxFn: defaultBeginTx(),
-			DeleteGlobalDefaultFn: func(_ db.Tx, user, id string) error {
-				return db.NewNotFoundError("global default", id)
-			},
-		}}
-		c, _ := newTestContext(http.MethodDelete, "/quicklaunch/defaults/global/gd-1", "", map[string]string{"id": "gd-1"}, map[string]string{"user": "u"})
-		err := h.DeleteGlobalDefaultHandler(c)
-		assertHTTPError(t, err, http.StatusNotFound)
-	})
-
-	t.Run("other db error", func(t *testing.T) {
-		h := &Handlers{DB: &mockDB{
-			BeginTxFn: defaultBeginTx(),
-			DeleteGlobalDefaultFn: func(_ db.Tx, user, id string) error {
+			DeleteGlobalDefaultFn: func(_ context.Context, _ db.Tx, user, id string) error {
 				return fmt.Errorf("connection refused")
 			},
 		}}
@@ -1379,7 +1344,7 @@ func TestDeleteGlobalDefaultHandler(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
 		h := &Handlers{DB: &mockDB{
 			BeginTxFn: defaultBeginTx(),
-			DeleteGlobalDefaultFn: func(_ db.Tx, user, id string) error {
+			DeleteGlobalDefaultFn: func(_ context.Context, _ db.Tx, user, id string) error {
 				return nil
 			},
 		}}
@@ -1399,7 +1364,7 @@ func TestDeleteGlobalDefaultHandler(t *testing.T) {
 func TestListConcurrentJobLimitsHandler(t *testing.T) {
 	t.Run("begin tx error", func(t *testing.T) {
 		h := &Handlers{DB: &mockDB{
-			BeginTxFn: func() (db.Tx, error) { return nil, fmt.Errorf("tx error") },
+			BeginTxFn: func(context.Context) (db.Tx, error) { return nil, fmt.Errorf("tx error") },
 		}}
 		c, _ := newTestContext(http.MethodGet, "/settings/concurrent-job-limits", "", nil, nil)
 		err := h.ListConcurrentJobLimitsHandler(c)
@@ -1409,7 +1374,7 @@ func TestListConcurrentJobLimitsHandler(t *testing.T) {
 	t.Run("db error", func(t *testing.T) {
 		h := &Handlers{DB: &mockDB{
 			BeginTxFn: defaultBeginTx(),
-			ListConcurrentJobLimitsFn: func(_ db.Tx) ([]db.ConcurrentJobLimit, error) {
+			ListConcurrentJobLimitsFn: func(_ context.Context, _ db.Tx) ([]db.ConcurrentJobLimit, error) {
 				return nil, fmt.Errorf("db error")
 			},
 		}}
@@ -1421,7 +1386,7 @@ func TestListConcurrentJobLimitsHandler(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
 		h := &Handlers{DB: &mockDB{
 			BeginTxFn: defaultBeginTx(),
-			ListConcurrentJobLimitsFn: func(_ db.Tx) ([]db.ConcurrentJobLimit, error) {
+			ListConcurrentJobLimitsFn: func(_ context.Context, _ db.Tx) ([]db.ConcurrentJobLimit, error) {
 				return []db.ConcurrentJobLimit{{ConcurrentJobs: 8, IsDefault: true}}, nil
 			},
 		}}
@@ -1437,7 +1402,7 @@ func TestListConcurrentJobLimitsHandler(t *testing.T) {
 func TestGetConcurrentJobLimitHandler(t *testing.T) {
 	t.Run("begin tx error", func(t *testing.T) {
 		h := &Handlers{DB: &mockDB{
-			BeginTxFn: func() (db.Tx, error) { return nil, fmt.Errorf("tx error") },
+			BeginTxFn: func(context.Context) (db.Tx, error) { return nil, fmt.Errorf("tx error") },
 		}}
 		c, _ := newTestContext(http.MethodGet, "/settings/concurrent-job-limits/testuser", "", map[string]string{"username": "testuser"}, nil)
 		err := h.GetConcurrentJobLimitHandler(c)
@@ -1447,7 +1412,7 @@ func TestGetConcurrentJobLimitHandler(t *testing.T) {
 	t.Run("not found", func(t *testing.T) {
 		h := &Handlers{DB: &mockDB{
 			BeginTxFn: defaultBeginTx(),
-			GetConcurrentJobLimitFn: func(_ db.Tx, username string) (*db.ConcurrentJobLimit, error) {
+			GetConcurrentJobLimitFn: func(_ context.Context, _ db.Tx, username string) (*db.ConcurrentJobLimit, error) {
 				return nil, db.NewNotFoundError("job limit", username)
 			},
 		}}
@@ -1459,7 +1424,7 @@ func TestGetConcurrentJobLimitHandler(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
 		h := &Handlers{DB: &mockDB{
 			BeginTxFn: defaultBeginTx(),
-			GetConcurrentJobLimitFn: func(_ db.Tx, username string) (*db.ConcurrentJobLimit, error) {
+			GetConcurrentJobLimitFn: func(_ context.Context, _ db.Tx, username string) (*db.ConcurrentJobLimit, error) {
 				return &db.ConcurrentJobLimit{ConcurrentJobs: 4}, nil
 			},
 		}}
@@ -1482,7 +1447,7 @@ func TestSetConcurrentJobLimitHandler(t *testing.T) {
 
 	t.Run("begin tx error", func(t *testing.T) {
 		h := &Handlers{DB: &mockDB{
-			BeginTxFn: func() (db.Tx, error) { return nil, fmt.Errorf("tx error") },
+			BeginTxFn: func(context.Context) (db.Tx, error) { return nil, fmt.Errorf("tx error") },
 		}}
 		c, _ := newTestContext(http.MethodPut, "/settings/concurrent-job-limits/testuser", `{"concurrent_jobs":10}`, map[string]string{"username": "testuser"}, nil)
 		err := h.SetConcurrentJobLimitHandler(c)
@@ -1492,7 +1457,7 @@ func TestSetConcurrentJobLimitHandler(t *testing.T) {
 	t.Run("db error", func(t *testing.T) {
 		h := &Handlers{DB: &mockDB{
 			BeginTxFn: defaultBeginTx(),
-			SetConcurrentJobLimitFn: func(_ db.Tx, username string, limit int) (*db.ConcurrentJobLimit, error) {
+			SetConcurrentJobLimitFn: func(_ context.Context, _ db.Tx, username string, limit int) (*db.ConcurrentJobLimit, error) {
 				return nil, fmt.Errorf("db error")
 			},
 		}}
@@ -1504,7 +1469,7 @@ func TestSetConcurrentJobLimitHandler(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
 		h := &Handlers{DB: &mockDB{
 			BeginTxFn: defaultBeginTx(),
-			SetConcurrentJobLimitFn: func(_ db.Tx, username string, limit int) (*db.ConcurrentJobLimit, error) {
+			SetConcurrentJobLimitFn: func(_ context.Context, _ db.Tx, username string, limit int) (*db.ConcurrentJobLimit, error) {
 				return &db.ConcurrentJobLimit{ConcurrentJobs: limit}, nil
 			},
 		}}
@@ -1520,7 +1485,7 @@ func TestSetConcurrentJobLimitHandler(t *testing.T) {
 func TestRemoveConcurrentJobLimitHandler(t *testing.T) {
 	t.Run("begin tx error", func(t *testing.T) {
 		h := &Handlers{DB: &mockDB{
-			BeginTxFn: func() (db.Tx, error) { return nil, fmt.Errorf("tx error") },
+			BeginTxFn: func(context.Context) (db.Tx, error) { return nil, fmt.Errorf("tx error") },
 		}}
 		c, _ := newTestContext(http.MethodDelete, "/settings/concurrent-job-limits/testuser", "", map[string]string{"username": "testuser"}, nil)
 		err := h.RemoveConcurrentJobLimitHandler(c)
@@ -1530,7 +1495,7 @@ func TestRemoveConcurrentJobLimitHandler(t *testing.T) {
 	t.Run("db error", func(t *testing.T) {
 		h := &Handlers{DB: &mockDB{
 			BeginTxFn: defaultBeginTx(),
-			RemoveConcurrentJobLimitFn: func(_ db.Tx, username string) (*db.ConcurrentJobLimit, error) {
+			RemoveConcurrentJobLimitFn: func(_ context.Context, _ db.Tx, username string) (*db.ConcurrentJobLimit, error) {
 				return nil, fmt.Errorf("db error")
 			},
 		}}
@@ -1542,7 +1507,7 @@ func TestRemoveConcurrentJobLimitHandler(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
 		h := &Handlers{DB: &mockDB{
 			BeginTxFn: defaultBeginTx(),
-			RemoveConcurrentJobLimitFn: func(_ db.Tx, username string) (*db.ConcurrentJobLimit, error) {
+			RemoveConcurrentJobLimitFn: func(_ context.Context, _ db.Tx, username string) (*db.ConcurrentJobLimit, error) {
 				return &db.ConcurrentJobLimit{ConcurrentJobs: 8, IsDefault: true}, nil
 			},
 		}}

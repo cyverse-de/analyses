@@ -10,7 +10,7 @@ import (
 
 func mustNewAppsClient(t *testing.T, rawURL string) *AppsClient {
 	t.Helper()
-	c, err := NewAppsClient(rawURL)
+	c, err := NewAppsClient(rawURL, nil)
 	if err != nil {
 		t.Fatalf("NewAppsClient(%q): %v", rawURL, err)
 	}
@@ -19,7 +19,7 @@ func mustNewAppsClient(t *testing.T, rawURL string) *AppsClient {
 
 func mustNewDataInfoClient(t *testing.T, rawURL string) *DataInfoClient {
 	t.Helper()
-	c, err := NewDataInfoClient(rawURL)
+	c, err := NewDataInfoClient(rawURL, nil)
 	if err != nil {
 		t.Fatalf("NewDataInfoClient(%q): %v", rawURL, err)
 	}
@@ -34,7 +34,7 @@ func TestDoJSONGet(t *testing.T) {
 		}))
 		defer ts.Close()
 
-		result, err := doJSONGet(ts.URL)
+		result, err := doJSONGet(http.DefaultClient, ts.URL)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -50,7 +50,7 @@ func TestDoJSONGet(t *testing.T) {
 		}))
 		defer ts.Close()
 
-		_, err := doJSONGet(ts.URL)
+		_, err := doJSONGet(http.DefaultClient, ts.URL)
 		if err == nil {
 			t.Fatal("expected error for non-200 status")
 		}
@@ -66,7 +66,7 @@ func TestDoJSONGet(t *testing.T) {
 		}))
 		defer ts.Close()
 
-		_, err := doJSONGet(ts.URL)
+		_, err := doJSONGet(http.DefaultClient, ts.URL)
 		if err == nil {
 			t.Fatal("expected error for invalid JSON")
 		}
@@ -115,7 +115,7 @@ func TestAppsClient_GetApp(t *testing.T) {
 	})
 
 	t.Run("invalid base URL rejected at construction", func(t *testing.T) {
-		_, err := NewAppsClient("://bad-url")
+		_, err := NewAppsClient("://bad-url", nil)
 		if err == nil {
 			t.Fatal("expected error for invalid base URL")
 		}
@@ -217,7 +217,7 @@ func TestDataInfoClient_PathsAccessibleBy(t *testing.T) {
 	})
 
 	t.Run("invalid base URL rejected at construction", func(t *testing.T) {
-		_, err := NewDataInfoClient("://bad-url")
+		_, err := NewDataInfoClient("://bad-url", nil)
 		if err == nil {
 			t.Fatal("expected error for invalid base URL")
 		}
