@@ -9,12 +9,15 @@
 * Document code succinctly but thoroughly.
 * Generally treat warnings as errors unless fixing the warning would cause difficult to fix breakages.
 * Prefer using the standard library over adding new dependencies unless adding a new dependency is truly the more effective option or is the de-facto standard.
+* Never reimplement standard library functions. Use `strings.Contains`, `slices.Equal`, `maps.Clone`, etc. directly instead of writing custom helpers that duplicate their behavior.
 * Do a prettification/clean up pass on all generated code.
 * Add good comments to code that may be confusing or doesn't behave in a standard way.
 * Add comments to code changed as part of a pull request.
 * Keep comments succinct, but thorough.
 * Check for duplicated code. Don't duplicate interfaces or implementations across files, modules, packages, libraries, etc. Use one canonical version.
 * Split up files if they get too long.
+* Place shared utility functions (e.g., common parameter extraction, error formatting) in a general-purpose file rather than in a file for a specific entity or feature. This makes them discoverable and avoids implicit coupling.
+* Write comments that describe *intent and purpose* ("Get the specified or default version of the app") rather than restating what the code does ("Fetch app to validate").
 
 
 # API Design Guidelines
@@ -39,6 +42,7 @@
 * Use typed errors (custom error types with `errors.As`) for domain-specific error conditions like "not found". Never use string matching on error messages.
 * When a file exceeds ~300 lines, consider splitting it by entity/domain type (e.g., one file per database entity: quicklaunches.go, favorites.go, settings.go).
 * Before defining a new interface, search the codebase for an existing one with the same method set. Use type aliases or imports rather than duplicating.
+* Define interfaces in the package that contains their implementation, not in the consumer package. Consumers should import or alias the canonical interface.
 
 ## REST API & database patterns
 * Always thread `context.Context` through the full call chain:
@@ -60,6 +64,8 @@
 # Docker guidelines
 * Use '--network host' with local Docker containers by default.
 * Use '--network host' with Docker if you encounter DNS issues in containers.
+* Avoid hardcoding `GOOS`/`GOARCH` in Dockerfiles; let the build platform determine the target unless cross-compilation is explicitly needed.
+* If a build orchestration tool (e.g., `just`, `make`) is used in the project, use it in the Dockerfile too so build commands are maintained in one place.
 
 
 # Kubernetes guidelines
