@@ -157,6 +157,12 @@ type ValidationRequest struct {
 	User     string
 }
 
+// AppFetcher retrieves app definitions from the apps service.
+type AppFetcher interface {
+	GetApp(user, systemID, appID string) (map[string]any, error)
+	GetAppVersion(user, systemID, appID, versionID string) (map[string]any, error)
+}
+
 // PathChecker verifies path accessibility for a user.
 type PathChecker interface {
 	PathsAccessibleBy(paths []string, user string) (bool, error)

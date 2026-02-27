@@ -54,20 +54,16 @@ func NewAnalysesApp(database *sqlx.DB, appsBaseURL, dataInfoBaseURL string) (*An
 
 	app.router.HTTPErrorHandler = func(err error, c echo.Context) {
 		code := http.StatusInternalServerError
-		var body any
 
-		switch err := err.(type) {
+		// Extract the HTTP status code from typed errors.
+		switch e := err.(type) {
 		case common.ErrorResponse:
 			code = http.StatusBadRequest
-			body = err
 		case *echo.HTTPError:
-			code = err.Code
-			body = common.NewErrorResponse(err)
-		default:
-			body = common.NewErrorResponse(err)
+			code = e.Code
 		}
 
-		c.JSON(code, body) //nolint:errcheck
+		c.JSON(code, common.NewErrorResponse(err)) //nolint:errcheck
 	}
 
 	app.router.GET("/", app.Greeting).Name = "greeting"

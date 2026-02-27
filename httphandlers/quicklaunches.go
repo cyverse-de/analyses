@@ -9,36 +9,10 @@ import (
 	"github.com/labstack/echo/v4"
 )
 
-// Handlers holds dependencies for HTTP handlers.
-type Handlers struct {
-	DB             DatabaseStore
-	AppsClient     AppFetcher
-	DataInfoClient PathChecker
-}
-
-// NewHandlers creates a new Handlers instance.
-func NewHandlers(database DatabaseStore, appsClient AppFetcher, dataInfoClient PathChecker) *Handlers {
-	return &Handlers{
-		DB:             database,
-		AppsClient:     appsClient,
-		DataInfoClient: dataInfoClient,
-	}
-}
-
 // systemID is hard-coded to "de" because only DE apps currently support
 // Quick Launches. If other system IDs need support in the future, this
 // should be parameterized.
 const systemID = "de"
-
-// requireUser extracts the "user" query parameter from the request,
-// returning an HTTP 400 error if it is missing.
-func requireUser(c echo.Context) (string, error) {
-	user := c.QueryParam("user")
-	if user == "" {
-		return "", echo.NewHTTPError(http.StatusBadRequest, "user query parameter is required")
-	}
-	return user, nil
-}
 
 // AddQuickLaunchHandler handles creating a new quick launch.
 //
@@ -66,7 +40,7 @@ func (h *Handlers) AddQuickLaunchHandler(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
 	}
 
-	// Fetch app to validate and get version_id if needed
+	// Get the specified or default version of the app associated with the quick launch.
 	var app map[string]any
 	if nql.AppVersionID != "" {
 		app, err = h.AppsClient.GetAppVersion(user, systemID, nql.AppID, nql.AppVersionID)

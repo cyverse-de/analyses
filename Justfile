@@ -1,9 +1,13 @@
 default: build
 
+# Pass ldflags to strip debug info in production builds:
+#   just ldflags='-w -s' build
+ldflags := ''
+
 build: docs analyses
 
 analyses:
-    go build -o bin/analyses cmd/analyses/*.go
+    go build {{ if ldflags != "" { "-ldflags=" + ldflags } else { "" } }} -o bin/analyses cmd/analyses/*.go
 
 test:
     go test ./...

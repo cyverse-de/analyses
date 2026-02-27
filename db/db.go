@@ -3,6 +3,7 @@ package db
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 
@@ -72,4 +73,44 @@ func (d *Database) GetUserID(ctx context.Context, tx Tx, username string) (strin
 // DeletionResponse is the standard response for deletion operations.
 type DeletionResponse struct {
 	ID string `json:"id"`
+}
+
+// Store defines all database operations used by HTTP handlers.
+type Store interface {
+	BeginTx(ctx context.Context) (Tx, error)
+
+	// Quick Launches
+	GetQuickLaunch(ctx context.Context, tx Tx, id, user string) (*QuickLaunch, error)
+	GetAllQuickLaunches(ctx context.Context, tx Tx, user string) ([]QuickLaunch, error)
+	GetQuickLaunchesByApp(ctx context.Context, tx Tx, appID, user string) ([]QuickLaunch, error)
+	AddQuickLaunch(ctx context.Context, tx Tx, user string, nql *NewQuickLaunch) (*QuickLaunch, error)
+	UpdateQuickLaunch(ctx context.Context, tx Tx, id, user string, uql *UpdateQuickLaunchRequest) (*QuickLaunch, error)
+	DeleteQuickLaunch(ctx context.Context, tx Tx, id, user string) error
+	MergeSubmission(ctx context.Context, tx Tx, qlID, user string, newSubmission json.RawMessage) (json.RawMessage, error)
+
+	// Favorites
+	GetAllFavorites(ctx context.Context, tx Tx, user string) ([]QuickLaunchFavorite, error)
+	GetFavorite(ctx context.Context, tx Tx, user, favID string) (*QuickLaunchFavorite, error)
+	AddFavorite(ctx context.Context, tx Tx, user, quickLaunchID string) (*QuickLaunchFavorite, error)
+	DeleteFavorite(ctx context.Context, tx Tx, user, favID string) error
+
+	// User Defaults
+	GetUserDefault(ctx context.Context, tx Tx, user, id string) (*QuickLaunchUserDefault, error)
+	GetAllUserDefaults(ctx context.Context, tx Tx, user string) ([]QuickLaunchUserDefault, error)
+	AddUserDefault(ctx context.Context, tx Tx, user string, nud *NewQuickLaunchUserDefault) (*QuickLaunchUserDefault, error)
+	UpdateUserDefault(ctx context.Context, tx Tx, id, user string, update *UpdateQuickLaunchUserDefaultRequest) (*QuickLaunchUserDefault, error)
+	DeleteUserDefault(ctx context.Context, tx Tx, user, id string) error
+
+	// Global Defaults
+	GetGlobalDefault(ctx context.Context, tx Tx, user, id string) (*QuickLaunchGlobalDefault, error)
+	GetAllGlobalDefaults(ctx context.Context, tx Tx, user string) ([]QuickLaunchGlobalDefault, error)
+	AddGlobalDefault(ctx context.Context, tx Tx, user string, ngd *NewQuickLaunchGlobalDefault) (*QuickLaunchGlobalDefault, error)
+	UpdateGlobalDefault(ctx context.Context, tx Tx, id, user string, update *UpdateQuickLaunchGlobalDefaultRequest) (*QuickLaunchGlobalDefault, error)
+	DeleteGlobalDefault(ctx context.Context, tx Tx, user, id string) error
+
+	// Settings
+	ListConcurrentJobLimits(ctx context.Context, tx Tx) ([]ConcurrentJobLimit, error)
+	GetConcurrentJobLimit(ctx context.Context, tx Tx, username string) (*ConcurrentJobLimit, error)
+	SetConcurrentJobLimit(ctx context.Context, tx Tx, username string, limit int) (*ConcurrentJobLimit, error)
+	RemoveConcurrentJobLimit(ctx context.Context, tx Tx, username string) (*ConcurrentJobLimit, error)
 }

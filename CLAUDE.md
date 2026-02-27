@@ -7,7 +7,6 @@
 * Use table-driven tests rather than lots of small, similar tests.
 * Add doc comments to publicly available methods and functions.
 * Document code succinctly but thoroughly.
-* Use type hinting in Python.
 * Generally treat warnings as errors unless fixing the warning would cause difficult to fix breakages.
 * Prefer using the standard library over adding new dependencies unless adding a new dependency is truly the more effective option or is the de-facto standard.
 * Do a prettification/clean up pass on all generated code.
@@ -24,6 +23,7 @@
 
 
 # Guidelines for Python programming language projects
+* Use type hinting in Python.
 * Use 'uv' for building, running, and managing Python projects. See https://docs.astral.sh/uv/ for documentation.
 * Use 'ruff' for linting and formatting Python code. See https://docs.astral.sh/ruff/ for documentation.
 

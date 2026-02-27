@@ -2,6 +2,8 @@ package clients
 
 import (
 	"net/url"
+	"slices"
+	"strings"
 	"testing"
 )
 
@@ -88,25 +90,12 @@ func TestBuildURL(t *testing.T) {
 			base := mustParseURL(t, tt.baseURL)
 			got := buildURL(base, tt.components, tt.username, tt.query)
 			if tt.wantContains != "" {
-				if !contains(got, tt.wantContains) {
+				if !strings.Contains(got, tt.wantContains) {
 					t.Errorf("buildURL() = %q, want it to contain %q", got, tt.wantContains)
 				}
 			}
 		})
 	}
-}
-
-func contains(s, substr string) bool {
-	return len(s) >= len(substr) && searchSubstring(s, substr)
-}
-
-func searchSubstring(s, substr string) bool {
-	for i := 0; i <= len(s)-len(substr); i++ {
-		if s[i:i+len(substr)] == substr {
-			return true
-		}
-	}
-	return false
 }
 
 func TestIsInputType(t *testing.T) {
@@ -149,26 +138,11 @@ func TestExtractPaths(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got := extractPaths(tt.val)
-			if !stringSliceEqual(got, tt.want) {
+			if !slices.Equal(got, tt.want) {
 				t.Errorf("extractPaths(%v) = %v, want %v", tt.val, got, tt.want)
 			}
 		})
 	}
-}
-
-func stringSliceEqual(a, b []string) bool {
-	if len(a) == 0 && len(b) == 0 {
-		return true
-	}
-	if len(a) != len(b) {
-		return false
-	}
-	for i := range a {
-		if a[i] != b[i] {
-			return false
-		}
-	}
-	return true
 }
 
 func TestExtractAppGroups(t *testing.T) {
