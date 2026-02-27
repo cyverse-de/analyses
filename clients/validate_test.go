@@ -22,7 +22,7 @@ func newDataInfoServer(t *testing.T, handler http.HandlerFunc) *DataInfoClient {
 func accessibleHandler(paths map[string]any) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]any{"paths": paths})
+		_ = json.NewEncoder(w).Encode(map[string]any{"paths": paths}) //nolint:errcheck // test server write
 	}
 }
 
@@ -136,7 +136,7 @@ func TestValidateSubmission(t *testing.T) {
 		diClient := newDataInfoServer(t, func(w http.ResponseWriter, r *http.Request) {
 			capturedUser = r.URL.Query().Get("user")
 			w.Header().Set("Content-Type", "application/json")
-			json.NewEncoder(w).Encode(map[string]any{
+			_ = json.NewEncoder(w).Encode(map[string]any{ //nolint:errcheck // test server write
 				"paths": map[string]any{"/a": map[string]any{}},
 			})
 		})

@@ -1,13 +1,13 @@
 package clients
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"net/url"
 	"regexp"
-	"strings"
 	"time"
 )
 
@@ -105,7 +105,7 @@ func (c *DataInfoClient) PathsAccessibleBy(paths []string, user string) (bool, e
 		return false, err
 	}
 
-	resp, err := c.httpClient.Post(reqURL, "application/json", strings.NewReader(string(bodyBytes)))
+	resp, err := c.httpClient.Post(reqURL, "application/json", bytes.NewReader(bodyBytes))
 	if err != nil {
 		return false, err
 	}
