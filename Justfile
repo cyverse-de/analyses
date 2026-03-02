@@ -7,7 +7,7 @@ ldflags := ''
 build: docs analyses
 
 analyses:
-    go build {{ if ldflags != "" { "-ldflags=" + ldflags } else { "" } }} -o bin/analyses cmd/analyses/*.go
+    go build {{ if ldflags != "" { "-ldflags='" + ldflags + "'" } else { "" } }} -o bin/analyses cmd/analyses/*.go
 
 test:
     go test ./...
