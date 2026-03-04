@@ -1,0 +1,951 @@
+basePath: /
+definitions:
+  common.ErrorResponse:
+    properties:
+      details:
+        additionalProperties: {}
+        type: object
+      error_code:
+        type: string
+      message:
+        type: string
+    type: object
+  db.ConcurrentJobLimit:
+    properties:
+      concurrent_jobs:
+        type: integer
+      is_default:
+        type: boolean
+      username:
+        type: string
+    type: object
+  db.ConcurrentJobLimitUpdate:
+    properties:
+      concurrent_jobs:
+        type: integer
+    type: object
+  db.ConcurrentJobLimits:
+    properties:
+      limits:
+        items:
+          $ref: '#/definitions/db.ConcurrentJobLimit'
+        type: array
+    type: object
+  db.DeletionResponse:
+    properties:
+      id:
+        type: string
+    type: object
+  db.NewQuickLaunch:
+    properties:
+      app_id:
+        type: string
+      app_version_id:
+        type: string
+      description:
+        type: string
+      is_public:
+        type: boolean
+      name:
+        type: string
+      submission:
+        type: object
+    type: object
+  db.NewQuickLaunchGlobalDefault:
+    properties:
+      app_id:
+        type: string
+      quick_launch_id:
+        type: string
+    type: object
+  db.NewQuickLaunchUserDefault:
+    properties:
+      app_id:
+        type: string
+      quick_launch_id:
+        type: string
+    type: object
+  db.QuickLaunch:
+    properties:
+      app_id:
+        type: string
+      app_version_id:
+        type: string
+      creator:
+        type: string
+      description:
+        type: string
+      id:
+        type: string
+      is_public:
+        type: boolean
+      name:
+        type: string
+      submission:
+        type: object
+    type: object
+  db.QuickLaunchFavorite:
+    properties:
+      id:
+        type: string
+      quick_launch_id:
+        type: string
+      user:
+        type: string
+    type: object
+  db.QuickLaunchGlobalDefault:
+    properties:
+      app_id:
+        type: string
+      id:
+        type: string
+      quick_launch_id:
+        type: string
+    type: object
+  db.QuickLaunchUserDefault:
+    properties:
+      app_id:
+        type: string
+      id:
+        type: string
+      quick_launch_id:
+        type: string
+      user:
+        type: string
+    type: object
+  db.UpdateQuickLaunchGlobalDefaultRequest:
+    properties:
+      app_id:
+        type: string
+      quick_launch_id:
+        type: string
+    type: object
+  db.UpdateQuickLaunchRequest:
+    properties:
+      app_id:
+        type: string
+      app_version_id:
+        type: string
+      creator:
+        type: string
+      description:
+        type: string
+      is_public:
+        type: boolean
+      name:
+        type: string
+      submission:
+        type: object
+    type: object
+  db.UpdateQuickLaunchUserDefaultRequest:
+    properties:
+      app_id:
+        type: string
+      quick_launch_id:
+        type: string
+    type: object
+  httphandlers.NewQuickLaunchFavoriteRequest:
+    properties:
+      quick_launch_id:
+        type: string
+    type: object
+host: localhost:60000
+info:
+  contact: {}
+  description: API for the Discovery Environment's analyses, including Quick Launches
+    and settings.
+  license:
+    name: 3-Clause BSD License
+    url: https://github.com/cyverse-de/analyses?tab=License-1-ov-file#readme
+  title: Analyses API
+  version: "1.0"
+paths:
+  /quicklaunch/defaults/global:
+    get:
+      description: Get all of the Quick Launch global defaults that the user has created.
+      parameters:
+      - description: Username
+        in: query
+        name: user
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/db.QuickLaunchGlobalDefault'
+            type: array
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/common.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/common.ErrorResponse'
+      summary: Get all Quick Launch global defaults
+      tags:
+      - quicklaunch-global-defaults
+    post:
+      consumes:
+      - application/json
+      description: Add a new Quick Launch global default. Assigns a new UUID.
+      parameters:
+      - description: Username
+        in: query
+        name: user
+        required: true
+        type: string
+      - description: Global default to add
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/db.NewQuickLaunchGlobalDefault'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/db.QuickLaunchGlobalDefault'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/common.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/common.ErrorResponse'
+      summary: Add a Quick Launch global default
+      tags:
+      - quicklaunch-global-defaults
+  /quicklaunch/defaults/global/{id}:
+    delete:
+      description: Delete the Quick Launch global default.
+      parameters:
+      - description: Global Default ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Username
+        in: query
+        name: user
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/db.DeletionResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/common.ErrorResponse'
+      summary: Delete a Quick Launch global default
+      tags:
+      - quicklaunch-global-defaults
+    get:
+      description: Get a Quick Launch global default.
+      parameters:
+      - description: Global Default ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Username
+        in: query
+        name: user
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/db.QuickLaunchGlobalDefault'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/common.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/common.ErrorResponse'
+      summary: Get a Quick Launch global default
+      tags:
+      - quicklaunch-global-defaults
+    patch:
+      consumes:
+      - application/json
+      description: Modifies an existing Quick Launch global default.
+      parameters:
+      - description: Global Default ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Username
+        in: query
+        name: user
+        required: true
+        type: string
+      - description: Fields to update
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/db.UpdateQuickLaunchGlobalDefaultRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/db.QuickLaunchGlobalDefault'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/common.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/common.ErrorResponse'
+      summary: Update a Quick Launch global default
+      tags:
+      - quicklaunch-global-defaults
+  /quicklaunch/defaults/user:
+    get:
+      description: Get all of the Quick Launch user defaults for the logged in user.
+      parameters:
+      - description: Username
+        in: query
+        name: user
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/db.QuickLaunchUserDefault'
+            type: array
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/common.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/common.ErrorResponse'
+      summary: Get all Quick Launch user defaults
+      tags:
+      - quicklaunch-user-defaults
+    post:
+      consumes:
+      - application/json
+      description: Add a Quick Launch user default. A new UUID will be assigned to
+        the user default and will be returned in the response.
+      parameters:
+      - description: Username
+        in: query
+        name: user
+        required: true
+        type: string
+      - description: User default to add
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/db.NewQuickLaunchUserDefault'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/db.QuickLaunchUserDefault'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/common.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/common.ErrorResponse'
+      summary: Add a Quick Launch user default
+      tags:
+      - quicklaunch-user-defaults
+  /quicklaunch/defaults/user/{id}:
+    delete:
+      description: Delete the Quick Launch user default.
+      parameters:
+      - description: User Default ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Username
+        in: query
+        name: user
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/db.DeletionResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/common.ErrorResponse'
+      summary: Delete a Quick Launch user default
+      tags:
+      - quicklaunch-user-defaults
+    get:
+      description: Get a Quick Launch user default.
+      parameters:
+      - description: User Default ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Username
+        in: query
+        name: user
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/db.QuickLaunchUserDefault'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/common.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/common.ErrorResponse'
+      summary: Get a Quick Launch user default
+      tags:
+      - quicklaunch-user-defaults
+    patch:
+      consumes:
+      - application/json
+      description: Modifies an existing Quick Launch user default.
+      parameters:
+      - description: User Default ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Username
+        in: query
+        name: user
+        required: true
+        type: string
+      - description: Fields to update
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/db.UpdateQuickLaunchUserDefaultRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/db.QuickLaunchUserDefault'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/common.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/common.ErrorResponse'
+      summary: Update a Quick Launch user default
+      tags:
+      - quicklaunch-user-defaults
+  /quicklaunch/favorites:
+    get:
+      description: Gets all of the user's Quick Launch favorites.
+      parameters:
+      - description: Username
+        in: query
+        name: user
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/db.QuickLaunchFavorite'
+            type: array
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/common.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/common.ErrorResponse'
+      summary: Get all Quick Launch favorites
+      tags:
+      - quicklaunch-favorites
+    post:
+      consumes:
+      - application/json
+      description: Adds a favorite Quick Launch to the database for the user. The
+        username passed in should already exist. A new UUID will be assigned to the
+        favorite and returned with the rest of the record.
+      parameters:
+      - description: Username
+        in: query
+        name: user
+        required: true
+        type: string
+      - description: Quick Launch to favorite
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/httphandlers.NewQuickLaunchFavoriteRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/db.QuickLaunchFavorite'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/common.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/common.ErrorResponse'
+      summary: Add a Quick Launch favorite
+      tags:
+      - quicklaunch-favorites
+  /quicklaunch/favorites/{id}:
+    delete:
+      description: Deletes a Quick Launch favorite. Does not delete the actual Quick
+        Launch, just the entry that listed it as a favorite for the user.
+      parameters:
+      - description: Favorite ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Username
+        in: query
+        name: user
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/db.DeletionResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/common.ErrorResponse'
+      summary: Delete a Quick Launch favorite
+      tags:
+      - quicklaunch-favorites
+    get:
+      description: Gets information about a favorited Quick Launch. Returns a Quick
+        Launch UUID which can be passed to the /quicklaunches endpoints to grab more
+        information.
+      parameters:
+      - description: Favorite ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Username
+        in: query
+        name: user
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/db.QuickLaunchFavorite'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/common.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/common.ErrorResponse'
+      summary: Get a Quick Launch favorite
+      tags:
+      - quicklaunch-favorites
+  /quicklaunches:
+    get:
+      description: Gets all of the Quick Launches for a user. Includes UUIDs.
+      parameters:
+      - description: Username
+        in: query
+        name: user
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/db.QuickLaunch'
+            type: array
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/common.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/common.ErrorResponse'
+      summary: Get all Quick Launches
+      tags:
+      - quicklaunches
+    post:
+      consumes:
+      - application/json
+      description: Adds a Quick Launch and corresponding submission information to
+        the database. The username passed in should already exist. A new UUID will
+        be assigned and returned.
+      parameters:
+      - description: Username
+        in: query
+        name: user
+        required: true
+        type: string
+      - description: Quick Launch to add
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/db.NewQuickLaunch'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/db.QuickLaunch'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/common.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/common.ErrorResponse'
+      summary: Add a Quick Launch
+      tags:
+      - quicklaunches
+  /quicklaunches/{id}:
+    delete:
+      description: Deletes a Quick Launch from the database. Will return a success
+        even if called on a Quick Launch that has either already been deleted or never
+        existed.
+      parameters:
+      - description: Quick Launch ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Username
+        in: query
+        name: user
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/db.DeletionResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/common.ErrorResponse'
+      summary: Delete a Quick Launch
+      tags:
+      - quicklaunches
+    get:
+      description: Gets the Quick Launch information from the database, including
+        its UUID, the name of the user that owns it, and the submission JSON.
+      parameters:
+      - description: Quick Launch ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Username
+        in: query
+        name: user
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/db.QuickLaunch'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/common.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/common.ErrorResponse'
+      summary: Get a Quick Launch
+      tags:
+      - quicklaunches
+    patch:
+      consumes:
+      - application/json
+      description: Modifies an existing Quick Launch, allowing the caller to change
+        owners and the contents of the submission JSON.
+      parameters:
+      - description: Quick Launch ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Username
+        in: query
+        name: user
+        required: true
+        type: string
+      - description: Fields to update
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/db.UpdateQuickLaunchRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/db.QuickLaunch'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/common.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/common.ErrorResponse'
+      summary: Update a Quick Launch
+      tags:
+      - quicklaunches
+  /quicklaunches/{id}/app-info:
+    get:
+      description: Returns the app info needed to create and populate the app launcher
+        in the UI. Populates the parameters with the values from the submission stored
+        for the quick launch.
+      parameters:
+      - description: Quick Launch ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Username
+        in: query
+        name: user
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/common.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/common.ErrorResponse'
+      summary: Get Quick Launch app info
+      tags:
+      - quicklaunches
+  /quicklaunches/apps/{id}:
+    get:
+      description: Returns a list of Quick Launches that the user can access based
+        on the app's UUID.
+      parameters:
+      - description: App ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Username
+        in: query
+        name: user
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/db.QuickLaunch'
+            type: array
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/common.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/common.ErrorResponse'
+      summary: Get Quick Launches by App
+      tags:
+      - quicklaunches
+  /settings/concurrent-job-limits:
+    get:
+      description: Lists all defined concurrent job limits.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/db.ConcurrentJobLimits'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/common.ErrorResponse'
+      summary: List concurrent job limits
+      tags:
+      - settings
+  /settings/concurrent-job-limits/{username}:
+    delete:
+      description: Removes the explicitly set concurrent job limit for a user. This
+        will effectively return the user's limit to whatever the default limit is.
+      parameters:
+      - description: Username
+        in: path
+        name: username
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/db.ConcurrentJobLimit'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/common.ErrorResponse'
+      summary: Remove concurrent job limit
+      tags:
+      - settings
+    get:
+      description: Gets the concurrent job limit for a user. The returned job limit
+        may either be the limit that was explicitly assigned to the user or the default
+        job limit.
+      parameters:
+      - description: Username
+        in: path
+        name: username
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/db.ConcurrentJobLimit'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/common.ErrorResponse'
+      summary: Get concurrent job limit
+      tags:
+      - settings
+    put:
+      consumes:
+      - application/json
+      description: Sets the concurrent job limit for a user. The user's limit will
+        be updated explicitly in the database even if the requested limit is the same
+        as the default limit.
+      parameters:
+      - description: Username
+        in: path
+        name: username
+        required: true
+        type: string
+      - description: Job limit to set
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/db.ConcurrentJobLimitUpdate'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/db.ConcurrentJobLimit'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/common.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/common.ErrorResponse'
+      summary: Set concurrent job limit
+      tags:
+      - settings
+swagger: "2.0"

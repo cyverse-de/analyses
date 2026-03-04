@@ -1,0 +1,225 @@
+package clients
+
+import (
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+)
+
+func mustNewAppsClient(t *testing.T, rawURL string) *AppsClient {
+	t.Helper()
+	c, err := NewAppsClient(rawURL, nil)
+	if err != nil {
+		t.Fatalf("NewAppsClient(%q): %v", rawURL, err)
+	}
+	return c
+}
+
+func mustNewDataInfoClient(t *testing.T, rawURL string) *DataInfoClient {
+	t.Helper()
+	c, err := NewDataInfoClient(rawURL, nil)
+	if err != nil {
+		t.Fatalf("NewDataInfoClient(%q): %v", rawURL, err)
+	}
+	return c
+}
+
+func TestDoJSONGet(t *testing.T) {
+	t.Run("200 with valid JSON", func(t *testing.T) {
+		ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(map[string]any{"id": "123"}) //nolint:errcheck
+		}))
+		defer ts.Close()
+
+		result, err := doJSONGet(http.DefaultClient, ts.URL)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if result["id"] != "123" {
+			t.Errorf("expected id=123, got %v", result["id"])
+		}
+	})
+
+	t.Run("non-200 status", func(t *testing.T) {
+		ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusInternalServerError)
+			w.Write([]byte("server error")) //nolint:errcheck
+		}))
+		defer ts.Close()
+
+		_, err := doJSONGet(http.DefaultClient, ts.URL)
+		if err == nil {
+			t.Fatal("expected error for non-200 status")
+		}
+		if !strings.Contains(err.Error(), "500") {
+			t.Errorf("expected error to mention status 500, got: %v", err)
+		}
+	})
+
+	t.Run("invalid JSON on 200", func(t *testing.T) {
+		ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusOK)
+			w.Write([]byte("not json")) //nolint:errcheck
+		}))
+		defer ts.Close()
+
+		_, err := doJSONGet(http.DefaultClient, ts.URL)
+		if err == nil {
+			t.Fatal("expected error for invalid JSON")
+		}
+		if !strings.Contains(err.Error(), "decode") {
+			t.Errorf("expected decode error, got: %v", err)
+		}
+	})
+}
+
+func TestAppsClient_GetApp(t *testing.T) {
+	t.Run("success", func(t *testing.T) {
+		ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if !strings.Contains(r.URL.Path, "/apps/de/app-123") {
+				t.Errorf("unexpected path: %s", r.URL.Path)
+			}
+			if r.URL.Query().Get("user") != "testuser" {
+				t.Errorf("unexpected user param: %s", r.URL.Query().Get("user"))
+			}
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(map[string]any{"id": "app-123", "name": "My App"}) //nolint:errcheck
+		}))
+		defer ts.Close()
+
+		client := mustNewAppsClient(t, ts.URL)
+		result, err := client.GetApp("testuser@example.com", "de", "app-123")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if result["id"] != "app-123" {
+			t.Errorf("expected id=app-123, got %v", result["id"])
+		}
+	})
+
+	t.Run("error response", func(t *testing.T) {
+		ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusNotFound)
+			w.Write([]byte("not found")) //nolint:errcheck
+		}))
+		defer ts.Close()
+
+		client := mustNewAppsClient(t, ts.URL)
+		_, err := client.GetApp("user", "de", "bad-id")
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("invalid base URL rejected at construction", func(t *testing.T) {
+		_, err := NewAppsClient("://bad-url", nil)
+		if err == nil {
+			t.Fatal("expected error for invalid base URL")
+		}
+	})
+}
+
+func TestAppsClient_GetAppVersion(t *testing.T) {
+	t.Run("success with version path", func(t *testing.T) {
+		ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if !strings.Contains(r.URL.Path, "/apps/de/app-123/versions/v1") {
+				t.Errorf("unexpected path: %s", r.URL.Path)
+			}
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(map[string]any{"id": "app-123", "version_id": "v1"}) //nolint:errcheck
+		}))
+		defer ts.Close()
+
+		client := mustNewAppsClient(t, ts.URL)
+		result, err := client.GetAppVersion("user", "de", "app-123", "v1")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if result["version_id"] != "v1" {
+			t.Errorf("expected version_id=v1, got %v", result["version_id"])
+		}
+	})
+}
+
+func TestDataInfoClient_PathsAccessibleBy(t *testing.T) {
+	t.Run("empty paths returns true", func(t *testing.T) {
+		client := mustNewDataInfoClient(t, "http://unused")
+		ok, err := client.PathsAccessibleBy([]string{}, "user")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if !ok {
+			t.Error("expected true for empty paths")
+		}
+	})
+
+	t.Run("all accessible", func(t *testing.T) {
+		ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(map[string]any{ //nolint:errcheck
+				"paths": map[string]any{
+					"/a": map[string]any{},
+					"/b": map[string]any{},
+				},
+			})
+		}))
+		defer ts.Close()
+
+		client := mustNewDataInfoClient(t, ts.URL)
+		ok, err := client.PathsAccessibleBy([]string{"/a", "/b"}, "user")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if !ok {
+			t.Error("expected true when all paths are accessible")
+		}
+	})
+
+	t.Run("some paths missing from response", func(t *testing.T) {
+		ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(map[string]any{ //nolint:errcheck
+				"paths": map[string]any{
+					"/a": map[string]any{},
+				},
+			})
+		}))
+		defer ts.Close()
+
+		client := mustNewDataInfoClient(t, ts.URL)
+		ok, err := client.PathsAccessibleBy([]string{"/a", "/b"}, "user")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if ok {
+			t.Error("expected false when some paths are missing")
+		}
+	})
+
+	t.Run("non-200 returns error", func(t *testing.T) {
+		ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusInternalServerError)
+			w.Write([]byte("server error")) //nolint:errcheck
+		}))
+		defer ts.Close()
+
+		client := mustNewDataInfoClient(t, ts.URL)
+		_, err := client.PathsAccessibleBy([]string{"/a"}, "user")
+		if err == nil {
+			t.Fatal("expected error for non-200 response")
+		}
+		if !strings.Contains(err.Error(), "500") {
+			t.Errorf("expected error to mention 500, got: %v", err)
+		}
+	})
+
+	t.Run("invalid base URL rejected at construction", func(t *testing.T) {
+		_, err := NewDataInfoClient("://bad-url", nil)
+		if err == nil {
+			t.Fatal("expected error for invalid base URL")
+		}
+	})
+}
