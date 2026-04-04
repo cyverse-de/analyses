@@ -6,7 +6,7 @@ import "context"
 type ConcurrentJobLimit struct {
 	Username       *string `db:"username" json:"username,omitempty"`
 	ConcurrentJobs int     `db:"concurrent_jobs" json:"concurrent_jobs"`
-	IsDefault      bool    `db:"is_default" json:"is_default,omitempty"`
+	IsDefault      bool    `db:"is_default" json:"is_default"`
 }
 
 // ConcurrentJobLimits wraps a list of limits for JSON response.
