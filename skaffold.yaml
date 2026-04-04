@@ -1,14 +1,17 @@
-apiVersion: skaffold/v1
+apiVersion: skaffold/v3
 kind: Config
 metadata:
   name: analyses
-deploy:
-  kubectl:
-    manifests:
-    - k8s/analyses.yml
 build:
+  artifacts:
+    - image: harbor.cyverse.org/de/analyses
   tagPolicy:
     gitCommit: {}
-  artifacts:
-  - image: harbor.cyverse.org/de/analyses
   local: {}
+  platforms:
+    - "linux/amd64"
+manifests:
+  rawYaml:
+    - k8s/analyses.yml
+deploy:
+  kubectl: {}
