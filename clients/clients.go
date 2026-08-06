@@ -266,6 +266,10 @@ func QuickLaunchAppInfo(submission, app map[string]any, sysID string) map[string
 	debug, _ := submission["debug"].(bool)
 	app["debug"] = debug
 
+	if tls, ok := submission["time_limit_seconds"]; ok && tls != nil {
+		app["time_limit_seconds"] = tls
+	}
+
 	rawGroups, ok := app["groups"].([]any)
 	if !ok || config == nil {
 		return app
