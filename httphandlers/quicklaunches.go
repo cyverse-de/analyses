@@ -73,6 +73,10 @@ func (h *Handlers) AddQuickLaunchHandler(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
 	}
 
+	if nql.Submission, err = clients.RedactSensitiveParams(nql.Submission, app); err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid submission JSON")
+	}
+
 	tx, err := h.DB.BeginTx(ctx)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
@@ -292,6 +296,14 @@ func (h *Handlers) UpdateQuickLaunchHandler(c echo.Context) error {
 	}
 	if err := clients.ValidateSubmission(h.DataInfoClient, valReq); err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
+	}
+
+	if uql.Submission != nil {
+		redacted, rerr := clients.RedactSensitiveParams(*uql.Submission, app)
+		if rerr != nil {
+			return echo.NewHTTPError(http.StatusBadRequest, "invalid submission JSON")
+		}
+		uql.Submission = &redacted
 	}
 
 	ql, err := h.DB.UpdateQuickLaunch(ctx, tx, id, user, &uql)

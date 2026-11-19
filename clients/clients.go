@@ -142,6 +142,7 @@ type AppParam struct {
 	Type         string `json:"type"`
 	Value        any    `json:"value,omitempty"`
 	DefaultValue any    `json:"defaultValue,omitempty"`
+	IsSensitive  bool   `json:"is_sensitive,omitempty"`
 }
 
 // AppGroup represents a group of parameters in an app definition.
@@ -187,7 +188,10 @@ func extractAppGroups(app map[string]any) []AppGroup {
 			}
 			id, _ := pm["id"].(string)
 			typ, _ := pm["type"].(string)
-			params = append(params, AppParam{ID: id, Type: typ, Value: pm["value"], DefaultValue: pm["defaultValue"]})
+			sensitive, _ := pm["is_sensitive"].(bool)
+			params = append(params, AppParam{
+				ID: id, Type: typ, Value: pm["value"], DefaultValue: pm["defaultValue"], IsSensitive: sensitive,
+			})
 		}
 		groups = append(groups, AppGroup{Parameters: params})
 	}
@@ -260,7 +264,54 @@ func extractPaths(val any) []string {
 	}
 }
 
+// sensitiveParamIDs returns the IDs of the app's sensitive parameters. The IDs match the submission config keys.
+func sensitiveParamIDs(app map[string]any) []string {
+	var ids []string
+	for _, group := range extractAppGroups(app) {
+		for _, param := range group.Parameters {
+			if param.IsSensitive {
+				ids = append(ids, param.ID)
+			}
+		}
+	}
+	return ids
+}
+
+// RedactSensitiveParams removes the values of the app's sensitive parameters from a submission's config and
+// job_config, so that they're never stored. Sensitive values are secrets that the user enters for each launch; a
+// quick launch shouldn't keep them, and a public quick launch would share them with every user.
+func RedactSensitiveParams(submission json.RawMessage, app map[string]any) (json.RawMessage, error) {
+	ids := sensitiveParamIDs(app)
+	if len(ids) == 0 {
+		return submission, nil
+	}
+
+	var subMap map[string]any
+	if err := json.Unmarshal(submission, &subMap); err != nil {
+		return nil, err
+	}
+
+	redacted := false
+	for _, key := range []string{"config", "job_config"} {
+		config, ok := subMap[key].(map[string]any)
+		if !ok {
+			continue
+		}
+		for _, id := range ids {
+			if _, has := config[id]; has {
+				delete(config, id)
+				redacted = true
+			}
+		}
+	}
+	if !redacted {
+		return submission, nil
+	}
+	return json.Marshal(subMap)
+}
+
 // QuickLaunchAppInfo populates app params from a submission's config.
+// Sensitive params are never populated, even if a value was stored before they were redacted.
 func QuickLaunchAppInfo(submission, app map[string]any, sysID string) map[string]any {
 	config, _ := submission["config"].(map[string]any)
 	debug, _ := submission["debug"].(bool)
@@ -281,7 +332,7 @@ func QuickLaunchAppInfo(submission, app map[string]any, sysID string) map[string
 		rawParams := gm["parameters"].([]any)
 		for j, param := range group.Parameters {
 			val, hasVal := config[param.ID]
-			if !hasVal {
+			if !hasVal || param.IsSensitive {
 				continue
 			}
 			pm := rawParams[j].(map[string]any)
