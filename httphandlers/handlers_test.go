@@ -1519,3 +1519,92 @@ func TestRemoveConcurrentJobLimitHandler(t *testing.T) {
 		}
 	})
 }
+
+// ──────────────────────────────────────────────────────────────
+// Sensitive parameters
+// ──────────────────────────────────────────────────────────────
+
+func sensitiveTestApp() map[string]any {
+	return map[string]any{
+		"version_id": "v1",
+		"groups": []any{
+			map[string]any{
+				"parameters": []any{
+					map[string]any{"id": "step_secret", "type": "EnvironmentVariable", "is_sensitive": true},
+					map[string]any{"id": "step_plain", "type": "EnvironmentVariable"},
+				},
+			},
+		},
+	}
+}
+
+func assertSecretRedacted(t *testing.T, sub json.RawMessage) {
+	t.Helper()
+	var m map[string]any
+	if err := json.Unmarshal(sub, &m); err != nil {
+		t.Fatalf("stored submission isn't valid JSON: %v", err)
+	}
+	config, _ := m["config"].(map[string]any)
+	if _, has := config["step_secret"]; has {
+		t.Error("expected the sensitive value not to be stored")
+	}
+	if config["step_plain"] != "visible" {
+		t.Errorf("expected the plain value to be stored, got %v", config["step_plain"])
+	}
+}
+
+func TestQuickLaunchHandlersRedactSensitiveParams(t *testing.T) {
+	sub := `{"config":{"step_secret":"hunter2","step_plain":"visible"}}`
+
+	t.Run("add", func(t *testing.T) {
+		var stored json.RawMessage
+		h := &Handlers{
+			AppsClient: &mockAppFetcher{
+				GetAppFn: func(user, systemID, appID string) (map[string]any, error) { return sensitiveTestApp(), nil },
+			},
+			DataInfoClient: &mockPathChecker{},
+			DB: &mockDB{
+				BeginTxFn: defaultBeginTx(),
+				AddQuickLaunchFn: func(_ context.Context, _ db.Tx, user string, nql *db.NewQuickLaunch) (*db.QuickLaunch, error) {
+					stored = nql.Submission
+					return &db.QuickLaunch{ID: "new-ql"}, nil
+				},
+			},
+		}
+		body := `{"app_id":"app-1","submission":` + sub + `}`
+		c, _ := newTestContext(http.MethodPost, "/quicklaunches", body, nil, map[string]string{"user": "u"})
+		assertNoError(t, h.AddQuickLaunchHandler(c))
+		assertSecretRedacted(t, stored)
+	})
+
+	t.Run("update", func(t *testing.T) {
+		var stored json.RawMessage
+		h := &Handlers{
+			DB: &mockDB{
+				BeginTxFn: defaultBeginTx(),
+				GetQuickLaunchFn: func(_ context.Context, _ db.Tx, id, user string) (*db.QuickLaunch, error) {
+					return &db.QuickLaunch{ID: id, AppID: "app-1", AppVersionID: "v1",
+						Submission: json.RawMessage(`{"config":{}}`)}, nil
+				},
+				MergeSubmissionFn: func(_ context.Context, _ db.Tx, qlID, user string, newSubmission json.RawMessage) (json.RawMessage, error) {
+					return newSubmission, nil
+				},
+				UpdateQuickLaunchFn: func(_ context.Context, _ db.Tx, id, user string, uql *db.UpdateQuickLaunchRequest) (*db.QuickLaunch, error) {
+					stored = *uql.Submission
+					return &db.QuickLaunch{ID: id}, nil
+				},
+			},
+			AppsClient: &mockAppFetcher{
+				GetAppVersionFn: func(user, systemID, appID, versionID string) (map[string]any, error) {
+					return sensitiveTestApp(), nil
+				},
+			},
+			DataInfoClient: &mockPathChecker{},
+		}
+		body := `{"submission":` + sub + `}`
+		c, _ := newTestContext(http.MethodPatch, "/quicklaunches/ql-1", body, map[string]string{"id": "ql-1"},
+			map[string]string{"user": "u"})
+		assertNoError(t, h.UpdateQuickLaunchHandler(c))
+		assertSecretRedacted(t, stored)
+	})
+}
